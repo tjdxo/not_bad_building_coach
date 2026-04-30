@@ -46,11 +46,15 @@ Open the frontend at [http://localhost:3000](http://localhost:3000). If Next.js 
 To verify the connection:
 
 - Run `python -m app.mock_seed` in the backend once after pulling these changes.
-- Enter an address such as `성수 그린타워`, `테헤란로`, or `서초대로` and click `진단 시작`.
+- Enter at least two characters such as `송파` or `거여` in the main address input.
+- Confirm address candidates appear below the input.
+- Click a candidate and confirm the input changes to the selected `display_address`.
+- Click `진단 시작`.
 - Confirm the browser Console prints `백엔드 응답:`.
+- Confirm the Network tab shows `GET http://localhost:8080/api/buildings?query=...&page=1&limit=20`.
 - Confirm the Network tab shows `POST http://localhost:8080/api/report` with status `200`.
 - Confirm the page moves to `/dashboard?address=...`.
-- Open `/search?query=성수` and confirm the registered backend building appears.
+- Open `/search?query=송파` and confirm backend search results appear.
 - Confirm the backend terminal shows logs similar to `POST /api/report HTTP/1.1" 200 OK`.
 
 The main app flow is:

@@ -11,6 +11,23 @@ export type ApiBuilding = {
   elevator_count: number;
 };
 
+export type BuildingSearchItem = {
+  building_id: string | number | null;
+  plat_plc: string | null;
+  road_address: string | null;
+  sgg_cd_nm: string | null;
+  bjd_cd_nm: string | null;
+  display_address: string;
+};
+
+export type BuildingSearchResponse = {
+  items: BuildingSearchItem[];
+  page: number;
+  limit: number;
+  total: number;
+  has_next: boolean;
+};
+
 export type MonthlyEnergyPoint = {
   year: number;
   month: number;
@@ -51,117 +68,6 @@ const legacyBuildingAddress: Record<string, string> = {
   "jamsil-school": "서울특별시 송파구 올림픽로 214",
 };
 
-const fallbackBuildings: ApiBuilding[] = [
-  {
-    id: 1,
-    building_code: "SEOUL-OFFICE-001",
-    name: "서초 비즈니스 센터",
-    road_address: "서울특별시 서초구 서초대로 301",
-    jibun_address: "서울특별시 서초구 서초동 1555-3",
-    building_type: "office",
-    gross_floor_area: 11800,
-    approval_year: 2012,
-    floors: 12,
-    elevator_count: 4,
-  },
-  {
-    id: 2,
-    building_code: "SEOUL-OFFICE-002",
-    name: "강남 스마트 타워",
-    road_address: "서울특별시 강남구 테헤란로 142",
-    jibun_address: "서울특별시 강남구 역삼동 736-24",
-    building_type: "office",
-    gross_floor_area: 12450,
-    approval_year: 2016,
-    floors: 15,
-    elevator_count: 5,
-  },
-  {
-    id: 3,
-    building_code: "SEOUL-OFFICE-003",
-    name: "송파 파크 오피스",
-    road_address: "서울특별시 송파구 법원로 128",
-    jibun_address: "서울특별시 송파구 문정동 642-3",
-    building_type: "office",
-    gross_floor_area: 10500,
-    approval_year: 2009,
-    floors: 11,
-    elevator_count: 4,
-  },
-  {
-    id: 4,
-    building_code: "SEOUL-OFFICE-004",
-    name: "성수 그린타워",
-    road_address: "서울특별시 성동구 성수이로 123",
-    jibun_address: "서울특별시 성동구 성수동2가 315-12",
-    building_type: "office",
-    gross_floor_area: 8520,
-    approval_year: 2014,
-    floors: 10,
-    elevator_count: 3,
-  },
-  {
-    id: 5,
-    building_code: "SEOUL-OFFICE-005",
-    name: "마포 스마트오피스",
-    road_address: "서울특별시 마포구 월드컵북로 55",
-    jibun_address: "서울특별시 마포구 성산동 515-39",
-    building_type: "office",
-    gross_floor_area: 6980,
-    approval_year: 2011,
-    floors: 8,
-    elevator_count: 3,
-  },
-  {
-    id: 6,
-    building_code: "SEOUL-MEDICAL-001",
-    name: "강남 메디컬플라자",
-    road_address: "서울특별시 강남구 테헤란로 221",
-    jibun_address: "서울특별시 강남구 역삼동 677-25",
-    building_type: "medical",
-    gross_floor_area: 5430,
-    approval_year: 2017,
-    floors: 9,
-    elevator_count: 3,
-  },
-  {
-    id: 7,
-    building_code: "SEOUL-EDU-001",
-    name: "잠실 교육문화센터",
-    road_address: "서울특별시 송파구 올림픽로 214",
-    jibun_address: "서울특별시 송파구 잠실동 40-1",
-    building_type: "education",
-    gross_floor_area: 4870,
-    approval_year: 2010,
-    floors: 6,
-    elevator_count: 2,
-  },
-];
-
-function searchFallbackBuildings(query: string) {
-  const keyword = query.trim();
-  const normalizedKeyword = keyword.replace(/\s/g, "");
-
-  if (!keyword) {
-    return fallbackBuildings;
-  }
-
-  return fallbackBuildings.filter((building) => {
-    const values = [
-      building.name,
-      building.road_address,
-      building.jibun_address,
-      building.building_type,
-      building.building_code,
-    ];
-
-    return values.some((value) => {
-      const normalizedValue = value.replace(/\s/g, "");
-      return value.includes(keyword) || normalizedValue.includes(normalizedKeyword);
-    });
-  });
-}
-
 export function resolveAddressParam(params: {
   address?: string;
   building?: string;
@@ -194,25 +100,32 @@ export function compareHref(address: string) {
   return `/compare?address=${encodeURIComponent(address)}`;
 }
 
-export async function searchBuildings(query = "") {
+export async function searchBuildings(query: string, page = 1, limit = 20) {
+  const keyword = query.trim();
+  if (!keyword) {
+    return {
+      items: [],
+      page,
+      limit,
+      total: 0,
+      has_next: false,
+    } satisfies BuildingSearchResponse;
+  }
+
   const params = new URLSearchParams();
-  if (query.trim()) {
-    params.set("query", query.trim());
+  params.set("query", keyword);
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+
+  const response = await fetch(`${API_BASE_URL}/api/buildings?${params.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`건물 검색 API 오류: ${response.status}`);
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/buildings?${params.toString()}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      throw new Error(`건물 검색 API 오류: ${response.status}`);
-    }
-
-    return (await response.json()) as ApiBuilding[];
-  } catch {
-    return searchFallbackBuildings(query);
-  }
+  return (await response.json()) as BuildingSearchResponse;
 }
 
 export async function fetchReport(address: string) {

@@ -1,10 +1,13 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReportRequest(BaseModel):
     address: str = Field(..., min_length=2, description="검색할 도로명 주소 일부")
+    building_id: Optional[Any] = None
+    plat_plc: Optional[str] = None
+    road_address: Optional[str] = None
 
 
 class BuildingInfo(BaseModel):
@@ -20,6 +23,23 @@ class BuildingInfo(BaseModel):
     elevator_count: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BuildingSearchItem(BaseModel):
+    building_id: Optional[Any] = None
+    plat_plc: Optional[str] = None
+    road_address: Optional[str] = None
+    sgg_cd_nm: Optional[str] = None
+    bjd_cd_nm: Optional[str] = None
+    display_address: str
+
+
+class BuildingSearchResponse(BaseModel):
+    items: List[BuildingSearchItem]
+    page: int
+    limit: int
+    total: int
+    has_next: bool
 
 
 class EnergySummary(BaseModel):

@@ -12,7 +12,7 @@ import {
   reportHref,
   resolveAddressParam,
   searchBuildings,
-  type ApiBuilding,
+  type BuildingSearchItem,
   type ReportApiResponse,
 } from "@/lib/building-api";
 
@@ -98,17 +98,17 @@ function BarChart({
   );
 }
 
-function BuildingPicker({ buildings }: { buildings: ApiBuilding[] }) {
+function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
   return (
     <div className="mt-8 grid gap-4 sm:grid-cols-3">
       {buildings.map((item) => (
         <Link
-          key={item.id}
-          href={dashboardHref(item.road_address)}
+          key={`${item.building_id ?? item.display_address}-${item.plat_plc ?? ""}`}
+          href={dashboardHref(item.display_address)}
           className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-emerald-200 hover:shadow-md"
         >
-          <div className="text-lg font-black text-slate-950">{item.name}</div>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{item.road_address}</p>
+          <div className="text-lg font-black text-slate-950">{item.display_address}</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{item.plat_plc}</p>
         </Link>
       ))}
     </div>
@@ -117,7 +117,8 @@ function BuildingPicker({ buildings }: { buildings: ApiBuilding[] }) {
 
 async function getSuggestions() {
   try {
-    return await searchBuildings("");
+    const result = await searchBuildings("서울", 1, 6);
+    return result.items;
   } catch {
     return [];
   }

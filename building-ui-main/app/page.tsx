@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
-import type { ReportApiResponse } from "@/lib/building-api";
+import { useEffect, useState, type FormEvent } from "react";
+import type { BuildingSearchItem, BuildingSearchResponse, ReportApiResponse } from "@/lib/building-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
@@ -42,8 +42,82 @@ export default function Home() {
   const router = useRouter();
   const [address, setAddress] = useState("");
   const [, setResult] = useState<ReportApiResponse | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<BuildingSearchItem | null>(null);
+  const [addressCandidates, setAddressCandidates] = useState<BuildingSearchItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const query = address.trim();
+    if (query.length < 2 || selectedBuilding?.display_address === address) {
+      setAddressCandidates([]);
+      setSearchLoading(false);
+      setSearchError("");
+      setHasSearched(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError("");
+      setHasSearched(true);
+      setSuggestionsOpen(true);
+
+      try {
+        const params = new URLSearchParams({
+          query,
+          page: "1",
+          limit: "20",
+        });
+        const response = await fetch(`${API_BASE_URL}/api/buildings?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`주소 검색 오류: ${response.status}`);
+        }
+
+        const data = (await response.json()) as BuildingSearchResponse;
+        setAddressCandidates(data.items.slice(0, 20));
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        setAddressCandidates([]);
+        setSearchError("주소 검색 중 오류가 발생했습니다.");
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [address, selectedBuilding]);
+
+  const handleAddressChange = (value: string) => {
+    setAddress(value);
+    setSelectedBuilding(null);
+    setSuggestionsOpen(value.trim().length >= 2);
+  };
+
+  const handleSelectBuilding = (building: BuildingSearchItem) => {
+    const displayAddress = building.display_address || building.road_address || building.plat_plc || "";
+    setSelectedBuilding({
+      ...building,
+      display_address: displayAddress,
+    });
+    setAddress(displayAddress);
+    setAddressCandidates([]);
+    setSearchError("");
+    setSuggestionsOpen(false);
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -58,7 +132,16 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify(
+          selectedBuilding
+            ? {
+                building_id: selectedBuilding.building_id,
+                address: selectedBuilding.display_address,
+                plat_plc: selectedBuilding.plat_plc,
+                road_address: selectedBuilding.road_address,
+              }
+            : { address },
+        ),
       });
 
       if (!response.ok) {
@@ -68,7 +151,7 @@ export default function Home() {
       const data = (await response.json()) as ReportApiResponse;
       console.log("백엔드 응답:", data);
       setResult(data);
-      router.push(`/dashboard?address=${encodeURIComponent(data.building.road_address || address)}`);
+      router.push(`/dashboard?address=${encodeURIComponent(data.building.road_address || selectedBuilding?.display_address || address)}`);
     } catch (err: unknown) {
       console.error("리포트 요청 실패:", err);
       setError(err instanceof Error ? err.message : "요청 중 오류가 발생했습니다.");
@@ -101,15 +184,53 @@ export default function Home() {
                   <label className="sr-only" htmlFor="query">
                     건물 주소
                   </label>
-                  <input
-                    id="query"
-                    name="address"
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="예: 서울시 성동구 성수이로 123"
-                    className="h-14 flex-1 rounded-2xl px-5 text-base outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      id="query"
+                      name="address"
+                      type="text"
+                      value={address}
+                      onChange={(e) => handleAddressChange(e.target.value)}
+                      onFocus={() => setSuggestionsOpen(address.trim().length >= 2)}
+                      placeholder="예: 서울시 성동구 성수이로 123"
+                      className="h-14 w-full rounded-2xl px-5 text-base outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500"
+                      autoComplete="off"
+                    />
+
+                    {suggestionsOpen && address.trim().length >= 2 && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 max-h-80 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                        {searchLoading && (
+                          <div className="px-4 py-3 text-sm font-semibold text-slate-500">주소 검색 중...</div>
+                        )}
+
+                        {!searchLoading && searchError && (
+                          <div className="px-4 py-3 text-sm font-semibold text-red-600">{searchError}</div>
+                        )}
+
+                        {!searchLoading && !searchError && hasSearched && addressCandidates.length === 0 && (
+                          <div className="px-4 py-3 text-sm font-semibold text-slate-500">검색 결과가 없습니다.</div>
+                        )}
+
+                        {!searchLoading &&
+                          !searchError &&
+                          addressCandidates.map((candidate) => (
+                            <button
+                              key={`${candidate.building_id ?? candidate.display_address}-${candidate.plat_plc ?? ""}`}
+                              type="button"
+                              onClick={() => handleSelectBuilding(candidate)}
+                              className="block w-full rounded-xl px-4 py-3 text-left transition hover:bg-emerald-50"
+                            >
+                              <span className="block text-sm font-black text-slate-950">
+                                {candidate.display_address || candidate.road_address || candidate.plat_plc}
+                              </span>
+                              <span className="mt-1 block text-xs font-semibold text-slate-500">
+                                {[candidate.plat_plc, candidate.sgg_cd_nm, candidate.bjd_cd_nm].filter(Boolean).join(" · ")}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     disabled={loading || !address.trim()}

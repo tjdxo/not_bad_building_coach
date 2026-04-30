@@ -70,13 +70,28 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 - API 문서: `http://127.0.0.1:8080/docs`
 - 헬스 체크: `http://127.0.0.1:8080/`
 
-## 6. `/api/buildings` 검색 예시
+## 6. Supabase `building_master` 주소 검색
+
+주소 자동완성은 Supabase/PostgreSQL의 `building_master` 테이블에서 필요한 주소 컬럼만 조회합니다.
+
+사용 컬럼:
+
+- `plat_plc`: 대지위치 / 지번 주소 계열
+- `road_address`: 도로명주소
+- `sgg_cd_nm`: 시군구명
+- `bjd_cd_nm`: 법정동명
+
+검색 API:
 
 ```bash
-curl "http://127.0.0.1:8080/api/buildings?query=성수"
+curl "http://127.0.0.1:8080/api/buildings?query=송파&page=1&limit=20"
 ```
 
-건물명, 도로명 주소, 지번 주소 일부로 검색할 수 있습니다. 예를 들어 `성수`, `테헤란로`, `서초대로`, `강남 메디컬플라자`로 조회할 수 있습니다.
+응답은 `items`, `page`, `limit`, `total`, `has_next`를 포함합니다. 각 item은 `building_id`, `plat_plc`, `road_address`, `sgg_cd_nm`, `bjd_cd_nm`, `display_address`만 반환합니다.
+
+`display_address`는 `road_address`가 있으면 도로명주소를 사용하고, 없으면 `plat_plc`를 사용합니다.
+
+`ILIKE '%검색어%'` 검색은 기본 B-tree 인덱스를 잘 쓰지 못하므로 `pg_trgm` GIN 인덱스가 필요합니다. Supabase SQL Editor에서 [sql/search_indexes.sql](sql/search_indexes.sql)을 실행하세요.
 
 ## 7. `/api/report` 호출 예시
 
@@ -150,4 +165,6 @@ backend/
   requirements.txt
   .env.example
   README.md
+  sql/
+    search_indexes.sql
 ```
