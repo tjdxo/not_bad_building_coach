@@ -1,10 +1,13 @@
 from typing import Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.buildings import router as buildings_router
 from app.api.report import router as report_router
+from app.db import engine
 
 app = FastAPI(
     title="세상에 나쁜 건물은 없다 - Backend Starter",
@@ -34,6 +37,19 @@ app.include_router(buildings_router, prefix="/api")
 @app.get("/")
 def read_root() -> Dict[str, str]:
     return {"message": "Building energy diagnosis backend is running."}
+
+
+@app.get("/api/db-health")
+def db_health() -> Dict[str, int | str]:
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1")).scalar()
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="데이터베이스 연결에 실패했습니다. backend/.env의 Supabase Session Pooler DATABASE_URL을 확인해주세요.",
+        ) from exc
+    return {"db": "connected", "result": result}
 
 
 @app.get("/demo")

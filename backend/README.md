@@ -44,9 +44,20 @@ CREATE DATABASE building_energy;
 `.env.example`을 참고해서 `.env` 파일을 만듭니다.
 
 ```env
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/building_energy
+DATABASE_URL=postgresql://postgres.[PROJECT_REF]:[DB_PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres
 OPENAI_API_KEY=
 ```
+
+Supabase 연결 문자열은 Session Pooler URI를 사용합니다.
+
+1. Supabase Dashboard에서 Project를 선택합니다.
+2. `Connect`를 클릭합니다.
+3. `Session pooler`를 선택합니다.
+4. URI를 복사합니다.
+5. `[YOUR-PASSWORD]`를 DB 비밀번호로 교체합니다.
+6. `backend/.env`의 `DATABASE_URL`에 저장합니다.
+
+FastAPI 백엔드는 Supabase Postgres에 직접 연결하고, 프론트엔드는 Supabase에 직접 연결하지 않습니다. uvicorn 기반 서버에서는 우선 Session Pooler를 사용합니다.
 
 `OPENAI_API_KEY`가 비어 있어도 앱은 동작하며, 이 경우 fallback 한국어 리포트를 반환합니다.
 
@@ -69,6 +80,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
 - API 문서: `http://127.0.0.1:8080/docs`
 - 헬스 체크: `http://127.0.0.1:8080/`
+- DB 연결 확인: `http://127.0.0.1:8080/api/db-health`
+
+PowerShell 확인:
+
+```powershell
+Invoke-RestMethod "http://localhost:8080/api/db-health"
+Invoke-RestMethod "http://localhost:8080/api/buildings?query=송파&page=1&limit=20"
+```
 
 ## 6. Supabase `building_master` 주소 검색
 
