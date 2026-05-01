@@ -112,7 +112,7 @@ export default function SearchPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12">
+    <main className={`min-h-screen bg-slate-50 py-12 ${selectedBuilding ? "pb-32 lg:pb-12" : ""}`}>
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-8">
           <p className="text-sm font-black tracking-[0.25em] text-emerald-600">주소 검색</p>
@@ -233,30 +233,49 @@ export default function SearchPage() {
                 const selected =
                   selectedBuilding?.building_id === building.building_id &&
                   selectedBuilding?.display_address === building.display_address;
+                const labelClass = selected
+                  ? "text-xs font-black uppercase tracking-[0.18em] text-emerald-50"
+                  : "text-xs font-black uppercase tracking-[0.18em] text-emerald-600";
+                const mutedLabelClass = selected
+                  ? "mt-4 text-xs font-black uppercase tracking-[0.18em] text-white/70"
+                  : "mt-4 text-xs font-black uppercase tracking-[0.18em] text-slate-400";
+                const addressClass = selected
+                  ? "mt-2 text-lg font-black leading-7 text-white"
+                  : "mt-2 text-lg font-black leading-7 text-slate-950";
+                const subAddressClass = selected
+                  ? "mt-2 text-sm font-semibold leading-6 text-white/90"
+                  : "mt-2 text-sm font-semibold leading-6 text-slate-600";
 
                 return (
                   <button
                     key={`${building.building_id ?? building.display_address}-${building.plat_plc ?? ""}`}
                     type="button"
                     onClick={() => setSelectedBuilding(building)}
-                    className={`block w-full rounded-3xl border bg-white p-6 text-left shadow-sm transition hover:border-emerald-200 hover:shadow-md ${
-                      selected ? "border-emerald-500 ring-4 ring-emerald-100" : "border-slate-200"
+                    className={`block w-full rounded-3xl border p-6 text-left transition ${
+                      selected
+                        ? "border-emerald-600 bg-emerald-600 text-white shadow-xl shadow-emerald-600/20"
+                        : "border-slate-200 bg-white text-slate-950 shadow-sm hover:border-emerald-300 hover:shadow-md"
                     }`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div>
-                        <div className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">도로명주소</div>
-                        <h3 className="mt-2 text-lg font-black leading-7 text-slate-950">
+                        <div className={labelClass}>도로명주소</div>
+                        <h3 className={addressClass}>
                           {building.road_address || building.display_address}
                         </h3>
-                        <div className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-slate-400">지번주소</div>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                        <div className={mutedLabelClass}>지번주소</div>
+                        <p className={subAddressClass}>
                           {building.plat_plc || "지번 주소 정보 없음"}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2 md:justify-end">
                         {[building.sgg_cd_nm, building.bjd_cd_nm].filter(Boolean).map((item) => (
-                          <span key={item} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                          <span
+                            key={item}
+                            className={`rounded-full px-3 py-1 text-xs font-black ${
+                              selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
                             {item}
                           </span>
                         ))}
@@ -301,41 +320,67 @@ export default function SearchPage() {
             )}
           </div>
 
-          <aside className="h-fit rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-black tracking-[0.2em] text-emerald-600">선택한 건물</p>
-            {selectedBuilding ? (
-              <div className="mt-5">
-                <h2 className="text-lg font-black leading-7 text-slate-950">
-                  {selectedBuilding.display_address}
-                </h2>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-                  {selectedBuilding.plat_plc}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {[selectedBuilding.sgg_cd_nm, selectedBuilding.bjd_cd_nm].filter(Boolean).map((item) => (
-                    <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                      {item}
-                    </span>
-                  ))}
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-sm font-black tracking-[0.2em] text-emerald-600">선택한 건물</p>
+              {selectedBuilding ? (
+                <div className="mt-5">
+                  <h2 className="text-lg font-black leading-7 text-slate-950">
+                    {selectedBuilding.display_address}
+                  </h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+                    {selectedBuilding.plat_plc}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {[selectedBuilding.sgg_cd_nm, selectedBuilding.bjd_cd_nm].filter(Boolean).map((item) => (
+                      <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <p className="mt-5 text-sm leading-6 text-slate-500">
-                검색 결과 카드 하나를 선택하면 진단을 시작할 수 있습니다.
-              </p>
-            )}
+              ) : (
+                <p className="mt-5 text-sm leading-6 text-slate-500">
+                  검색 결과 카드 하나를 선택하면 진단을 시작할 수 있습니다.
+                </p>
+              )}
 
-            <button
-              type="button"
-              disabled={!selectedBuilding || reportLoading}
-              onClick={() => void handleStartReport()}
-              className="mt-6 h-14 w-full rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {reportLoading ? "진단 요청 중..." : "선택한 건물로 진단 시작"}
-            </button>
+              <button
+                type="button"
+                disabled={!selectedBuilding || reportLoading}
+                onClick={() => void handleStartReport()}
+                className="mt-6 h-14 w-full rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {reportLoading ? "진단 요청 중..." : "선택한 건물로 진단 시작"}
+              </button>
+            </div>
           </aside>
         </section>
       </div>
+
+      {selectedBuilding && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-emerald-100 bg-white/95 px-4 py-3 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-emerald-600">선택한 건물</p>
+              <p className="truncate text-sm font-black text-slate-950">
+                {selectedBuilding.display_address}
+              </p>
+              <p className="truncate text-xs font-semibold text-slate-500">
+                {selectedBuilding.plat_plc}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={reportLoading}
+              onClick={() => void handleStartReport()}
+              className="shrink-0 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reportLoading ? "요청 중" : "진단 시작"}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
