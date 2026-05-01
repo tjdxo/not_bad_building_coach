@@ -91,13 +91,13 @@ def _get_building_master_id_column(db: Session) -> Optional[str]:
 
 def search_building_master(
     db: Session,
-    query: str = "",
+    query: Optional[str] = None,
     district: Optional[str] = None,
     dong: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
 ) -> Dict[str, Any]:
-    keyword = query.strip()
+    keyword = query.strip() if query else ""
     district_value = district.strip() if district else ""
     dong_value = dong.strip() if dong else ""
 
@@ -133,7 +133,14 @@ def search_building_master(
         params["dong"] = dong_value
 
     if keyword:
-        where_parts.append("(plat_plc ILIKE :search OR road_address ILIKE :search)")
+        where_parts.append("""
+            (
+              plat_plc ILIKE :search
+              OR road_address ILIKE :search
+              OR sgg_cd_nm ILIKE :search
+              OR bjd_cd_nm ILIKE :search
+            )
+        """)
         params["search"] = f"%{keyword}%"
         params["prefix"] = f"{keyword}%"
 
