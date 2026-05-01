@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -10,13 +12,22 @@ router = APIRouter(tags=["buildings"])
 
 @router.get("/buildings", response_model=schemas.BuildingSearchResponse)
 def search_buildings(
-    query: str = Query(..., min_length=1),
+    district: str = Query(default=""),
+    dong: str = Query(default=""),
+    query: str = Query(default=""),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> schemas.BuildingSearchResponse:
     try:
-        return crud.search_building_master(db, query=query, page=page, limit=limit)
+        return crud.search_building_master(
+            db,
+            district=district,
+            dong=dong,
+            query=query,
+            page=page,
+            limit=limit,
+        )
     except NoSuchTableError as exc:
         raise HTTPException(
             status_code=500,
@@ -26,4 +37,29 @@ def search_buildings(
         raise HTTPException(
             status_code=500,
             detail="건물 주소 검색 중 데이터베이스 오류가 발생했습니다.",
+        ) from exc
+
+
+@router.get("/districts", response_model=List[str])
+def get_districts(db: Session = Depends(get_db)) -> List[str]:
+    try:
+        return crud.get_building_master_districts(db)
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="구 목록 조회 중 데이터베이스 오류가 발생했습니다.",
+        ) from exc
+
+
+@router.get("/dongs", response_model=List[str])
+def get_dongs(
+    district: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+) -> List[str]:
+    try:
+        return crud.get_building_master_dongs(db, district=district)
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="동 목록 조회 중 데이터베이스 오류가 발생했습니다.",
         ) from exc

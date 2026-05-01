@@ -20,7 +20,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 ## FastAPI backend connection check
 
-`app/page.tsx` calls the backend API configured by `NEXT_PUBLIC_API_BASE_URL`.
+`app/page.tsx` is the introduction page and links to `/search`. The `/search` page calls the backend API configured by `NEXT_PUBLIC_API_BASE_URL`.
 For local development, set this in `.env.local`:
 
 ```env
@@ -46,24 +46,28 @@ Open the frontend at [http://localhost:3000](http://localhost:3000). If Next.js 
 To verify the connection:
 
 - Run `python -m app.mock_seed` in the backend once after pulling these changes.
-- Enter at least two characters such as `송파` or `거여` in the main address input.
-- Confirm address candidates appear below the input.
-- Click a candidate and confirm the input changes to the selected `display_address`.
-- Click `진단 시작`.
-- Confirm the browser Console prints `백엔드 응답:`.
-- Confirm the Network tab shows `GET http://localhost:8080/api/buildings?query=...&page=1&limit=20`.
+- Open `/` and click `내 건물 에너지 진단 바로가기`.
+- Confirm the page moves to `/search`.
+- Select a district and dong, enter a detail keyword such as `362`, then click `주소 검색`.
+- Confirm address result cards appear in pages of 20.
+- Click a candidate and confirm `선택한 건물로 진단 시작` is enabled.
+- Confirm the Network tab shows `GET http://localhost:8080/api/districts`.
+- Confirm the Network tab shows `GET http://localhost:8080/api/dongs?district=...`.
+- Confirm the Network tab shows `GET http://localhost:8080/api/buildings?district=...&dong=...&query=...&page=1&limit=20`.
 - Confirm the Network tab shows `POST http://localhost:8080/api/report` with status `200`.
 - Confirm the page moves to `/dashboard?address=...`.
-- Open `/search?query=송파` and confirm backend search results appear.
 - Confirm the backend terminal shows logs similar to `POST /api/report HTTP/1.1" 200 OK`.
 
 The main app flow is:
 
 ```text
-/ or /search
+/
+-> /search
 -> /dashboard?address=...
 -> /report?address=... or /compare?address=...
 ```
+
+`/` is now a service introduction page with a large CTA. Address filtering and pagination happen on `/search`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

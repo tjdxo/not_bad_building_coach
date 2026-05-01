@@ -1,17 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
-import type { BuildingSearchItem, BuildingSearchResponse, ReportApiResponse } from "@/lib/building-api";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 const valuePoints = [
   {
     title: "주소 기반 진단",
-    desc: "주소만 입력하면 건물 규모, 용도, 에너지 사용 패턴을 바탕으로 진단 흐름을 시작합니다.",
+    desc: "서울시 건물 주소를 기준으로 진단 가능한 건물 후보를 찾고 리포트 흐름을 시작합니다.",
     icon: "01",
   },
   {
@@ -32,134 +24,13 @@ const valuePoints = [
 ];
 
 const processSteps = [
-  "주소 입력",
-  "건물 데이터 확인",
+  "주소 검색",
+  "건물 후보 선택",
   "전기·가스 사용량 비교",
   "AI 리포트 및 정책 추천",
 ];
 
 export default function Home() {
-  const router = useRouter();
-  const [address, setAddress] = useState("");
-  const [, setResult] = useState<ReportApiResponse | null>(null);
-  const [selectedBuilding, setSelectedBuilding] = useState<BuildingSearchItem | null>(null);
-  const [addressCandidates, setAddressCandidates] = useState<BuildingSearchItem[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const query = address.trim();
-    if (query.length < 2 || selectedBuilding?.display_address === address) {
-      setAddressCandidates([]);
-      setSearchLoading(false);
-      setSearchError("");
-      setHasSearched(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setSearchLoading(true);
-      setSearchError("");
-      setHasSearched(true);
-      setSuggestionsOpen(true);
-
-      try {
-        const params = new URLSearchParams({
-          query,
-          page: "1",
-          limit: "20",
-        });
-        const response = await fetch(`${API_BASE_URL}/api/buildings?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`주소 검색 오류: ${response.status}`);
-        }
-
-        const data = (await response.json()) as BuildingSearchResponse;
-        setAddressCandidates(data.items.slice(0, 20));
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          return;
-        }
-        setAddressCandidates([]);
-        setSearchError("주소 검색 중 오류가 발생했습니다.");
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [address, selectedBuilding]);
-
-  const handleAddressChange = (value: string) => {
-    setAddress(value);
-    setSelectedBuilding(null);
-    setSuggestionsOpen(value.trim().length >= 2);
-  };
-
-  const handleSelectBuilding = (building: BuildingSearchItem) => {
-    const displayAddress = building.display_address || building.road_address || building.plat_plc || "";
-    setSelectedBuilding({
-      ...building,
-      display_address: displayAddress,
-    });
-    setAddress(displayAddress);
-    setAddressCandidates([]);
-    setSearchError("");
-    setSuggestionsOpen(false);
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    setLoading(true);
-    setError("");
-    setResult(null);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/report`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          selectedBuilding
-            ? {
-                building_id: selectedBuilding.building_id,
-                address: selectedBuilding.display_address,
-                plat_plc: selectedBuilding.plat_plc,
-                road_address: selectedBuilding.road_address,
-              }
-            : { address },
-        ),
-      });
-
-      if (!response.ok) {
-        throw new Error(`백엔드 오류: ${response.status}`);
-      }
-
-      const data = (await response.json()) as ReportApiResponse;
-      console.log("백엔드 응답:", data);
-      setResult(data);
-      router.push(`/dashboard?address=${encodeURIComponent(data.building.road_address || selectedBuilding?.display_address || address)}`);
-    } catch (err: unknown) {
-      console.error("리포트 요청 실패:", err);
-      setError(err instanceof Error ? err.message : "요청 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <main>
       <section className="relative overflow-hidden bg-white py-20 sm:py-28">
@@ -171,87 +42,44 @@ export default function Home() {
                 나쁜 건물은 없다 (Building Energy AI)
               </div>
               <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
-                주소만 입력하면
-                <span className="block text-emerald-600">건물 에너지 개선 방향이 보입니다.</span>
+                내 건물 주소를 찾고
+                <span className="block text-emerald-600">에너지 개선 방향을 확인하세요.</span>
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                전기와 가스 사용 데이터를 분석해 유사 건물 대비 효율, 탄소 절감 가능성, 적용 가능한 정책과
-                구체적인 실행 피드백을 한눈에 확인할 수 있습니다.
+                주소를 검색해 내 건물의 전기·가스 사용량과 유사 건물 대비 효율을 확인하고,
+                실행 가능한 절감 액션과 정책 매칭 정보를 리포트로 이어갑니다.
               </p>
 
-              <form onSubmit={handleSubmit} className="mt-10 max-w-2xl rounded-3xl border border-slate-200 bg-white p-2 shadow-xl">
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <label className="sr-only" htmlFor="query">
-                    건물 주소
-                  </label>
-                  <div className="relative flex-1">
-                    <input
-                      id="query"
-                      name="address"
-                      type="text"
-                      value={address}
-                      onChange={(e) => handleAddressChange(e.target.value)}
-                      onFocus={() => setSuggestionsOpen(address.trim().length >= 2)}
-                      placeholder="예: 서울시 성동구 성수이로 123"
-                      className="h-14 w-full rounded-2xl px-5 text-base outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500"
-                      autoComplete="off"
-                    />
-
-                    {suggestionsOpen && address.trim().length >= 2 && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 max-h-80 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                        {searchLoading && (
-                          <div className="px-4 py-3 text-sm font-semibold text-slate-500">주소 검색 중...</div>
-                        )}
-
-                        {!searchLoading && searchError && (
-                          <div className="px-4 py-3 text-sm font-semibold text-red-600">{searchError}</div>
-                        )}
-
-                        {!searchLoading && !searchError && hasSearched && addressCandidates.length === 0 && (
-                          <div className="px-4 py-3 text-sm font-semibold text-slate-500">검색 결과가 없습니다.</div>
-                        )}
-
-                        {!searchLoading &&
-                          !searchError &&
-                          addressCandidates.map((candidate) => (
-                            <button
-                              key={`${candidate.building_id ?? candidate.display_address}-${candidate.plat_plc ?? ""}`}
-                              type="button"
-                              onClick={() => handleSelectBuilding(candidate)}
-                              className="block w-full rounded-xl px-4 py-3 text-left transition hover:bg-emerald-50"
-                            >
-                              <span className="block text-sm font-black text-slate-950">
-                                {candidate.display_address || candidate.road_address || candidate.plat_plc}
-                              </span>
-                              <span className="mt-1 block text-xs font-semibold text-slate-500">
-                                {[candidate.plat_plc, candidate.sgg_cd_nm, candidate.bjd_cd_nm].filter(Boolean).join(" · ")}
-                              </span>
-                            </button>
-                          ))}
+              <div className="mt-10 max-w-2xl rounded-3xl border border-emerald-100 bg-white p-3 shadow-xl">
+                <div className="rounded-[1.25rem] bg-emerald-50 p-6">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-sm font-black text-white">
+                        BE
                       </div>
-                    )}
+                      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">
+                        서울시 건물 주소 검색부터 시작합니다.
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        구와 동을 고르고 상세 주소를 입력하면 60만 건 규모의 건물 주소 후보를 20개씩 확인할 수 있습니다.
+                      </p>
+                    </div>
+                    <Link
+                      href="/search"
+                      className="inline-flex h-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 px-7 text-base font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                    >
+                      내 건물 에너지 진단 바로가기
+                      <span className="ml-2">-&gt;</span>
+                    </Link>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={loading || !address.trim()}
-                    className="h-14 rounded-2xl bg-emerald-600 px-7 text-base font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? "진단 중..." : "진단 시작"}
-                  </button>
                 </div>
-              </form>
-
-              {error && (
-                <div className="mt-4 max-w-2xl rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">
-                  {error}
-                </div>
-              )}
+              </div>
 
               <div className="mt-5 flex flex-wrap gap-2 text-sm">
-                {["성수 그린타워", "서초대로", "테헤란로", "마포 스마트오피스"].map((item) => (
+                {["송파구", "거여동", "성내천로", "마천동"].map((item) => (
                   <Link
                     key={item}
-                    href={`/search?query=${encodeURIComponent(item)}`}
+                    href="/search"
                     className="rounded-full bg-slate-100 px-4 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                   >
                     {item}
@@ -262,15 +90,15 @@ export default function Home() {
 
             <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl">
               <div className="rounded-3xl bg-white/10 p-6">
-                <p className="text-sm font-bold text-emerald-300">주소 하나로 확인하는 건물 에너지 방향</p>
+                <p className="text-sm font-bold text-emerald-300">주소 선택 후 이어지는 진단 흐름</p>
                 <h2 className="mt-4 text-3xl font-black leading-tight">
-                  전기·가스 사용량부터 탄소 절감 정책까지 한 번에 확인하세요.
+                  검색, 선택, 비교, 리포트까지 한 화면 흐름으로 이어집니다.
                 </h2>
                 <div className="mt-8 space-y-4">
                   {[
-                    ["01", "건물 정보 확인", "주소를 기준으로 건물 용도와 규모를 확인합니다."],
-                    ["02", "사용량 비교", "유사 건물 대비 전기·가스 사용 수준을 비교합니다."],
-                    ["03", "개선 방향 제안", "실행할 수 있는 절감 방법과 정책 정보를 함께 보여줍니다."],
+                    ["01", "구·동 필터 선택", "서울특별시 안에서 구와 법정동을 단계적으로 좁힙니다."],
+                    ["02", "건물 후보 확인", "도로명주소와 지번주소를 함께 보고 정확한 건물을 선택합니다."],
+                    ["03", "진단 리포트 이동", "선택한 건물 후보를 기준으로 진단 리포트 요청을 시작합니다."],
                   ].map(([number, title, desc]) => (
                     <div key={title} className="flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-sm font-black">
@@ -294,7 +122,7 @@ export default function Home() {
           <div className="max-w-2xl">
             <p className="text-sm font-black tracking-[0.25em] text-emerald-600">진행 흐름</p>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              주소 입력부터 정책 확인까지 자연스럽게 이어집니다.
+              큰 데이터는 검색 페이지에서 단계적으로 좁힙니다.
             </h2>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-4">
@@ -324,16 +152,16 @@ export default function Home() {
           <div className="rounded-[2rem] bg-slate-950 p-8 text-white sm:p-12">
             <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <h2 className="text-3xl font-black tracking-tight">정부·지자체와 개인 사용자 모두 쉽게 확인할 수 있습니다.</h2>
+                <h2 className="text-3xl font-black tracking-tight">정확한 주소 선택이 진단 품질의 시작입니다.</h2>
                 <p className="mt-4 max-w-3xl text-slate-300">
-                  공공 정책 매칭, 탄소 절감 효과, 실행 우선순위가 리포트에서 함께 정리됩니다.
+                  도로명주소와 지번주소를 함께 확인한 뒤 선택한 건물을 기준으로 리포트를 생성합니다.
                 </p>
               </div>
               <Link
                 href="/search"
                 className="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-500 px-7 text-sm font-black text-white transition hover:bg-emerald-400"
               >
-                대시보드 보기
+                주소 검색하고 진단 시작하기
               </Link>
             </div>
           </div>

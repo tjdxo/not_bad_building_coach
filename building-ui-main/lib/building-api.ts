@@ -58,7 +58,7 @@ export type ReportApiResponse = {
   raw_analysis_json: Record<string, unknown>;
 };
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 const legacyBuildingAddress: Record<string, string> = {
@@ -100,9 +100,47 @@ export function compareHref(address: string) {
   return `/compare?address=${encodeURIComponent(address)}`;
 }
 
-export async function searchBuildings(query: string, page = 1, limit = 20) {
-  const keyword = query.trim();
-  if (!keyword) {
+export type BuildingSearchParams = {
+  district?: string;
+  dong?: string;
+  query?: string;
+  page?: number;
+  limit?: number;
+};
+
+export async function getDistricts() {
+  const response = await fetch(`${API_BASE_URL}/api/districts`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`구 목록 API 오류: ${response.status}`);
+  }
+
+  return (await response.json()) as string[];
+}
+
+export async function getDongs(district: string) {
+  const params = new URLSearchParams({ district });
+  const response = await fetch(`${API_BASE_URL}/api/dongs?${params.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`동 목록 API 오류: ${response.status}`);
+  }
+
+  return (await response.json()) as string[];
+}
+
+export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
+  const district = paramsInput.district?.trim() || "";
+  const dong = paramsInput.dong?.trim() || "";
+  const query = paramsInput.query?.trim() || "";
+  const page = paramsInput.page || 1;
+  const limit = paramsInput.limit || 20;
+
+  if (!district && !dong && !query) {
     return {
       items: [],
       page,
@@ -113,7 +151,15 @@ export async function searchBuildings(query: string, page = 1, limit = 20) {
   }
 
   const params = new URLSearchParams();
-  params.set("query", keyword);
+  if (district) {
+    params.set("district", district);
+  }
+  if (dong) {
+    params.set("dong", dong);
+  }
+  if (query) {
+    params.set("query", query);
+  }
   params.set("page", String(page));
   params.set("limit", String(limit));
 
@@ -126,6 +172,32 @@ export async function searchBuildings(query: string, page = 1, limit = 20) {
   }
 
   return (await response.json()) as BuildingSearchResponse;
+}
+
+export async function createReportForBuilding(building: BuildingSearchItem) {
+  const address = building.display_address || building.road_address || building.plat_plc || "";
+  const response = await fetch(`${API_BASE_URL}/api/report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      building_id: building.building_id,
+      address,
+      plat_plc: building.plat_plc,
+      road_address: building.road_address,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const message =
+      typeof payload?.detail === "string" ? payload.detail : `리포트 API 오류: ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload as ReportApiResponse;
 }
 
 export async function fetchReport(address: string) {

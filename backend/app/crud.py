@@ -91,12 +91,17 @@ def _get_building_master_id_column(db: Session) -> Optional[str]:
 
 def search_building_master(
     db: Session,
-    query: str,
+    query: str = "",
+    district: Optional[str] = None,
+    dong: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
 ) -> Dict[str, Any]:
     keyword = query.strip()
-    if not keyword:
+    district_value = district.strip() if district else ""
+    dong_value = dong.strip() if dong else ""
+
+    if not keyword and not district_value and not dong_value:
         return {
             "items": [],
             "page": page,
@@ -106,8 +111,6 @@ def search_building_master(
         }
 
     offset = (page - 1) * limit
-    search = f"%{keyword}%"
-    prefix = f"{keyword}%"
     id_column = _get_building_master_id_column(db)
     if id_column:
         id_select = f"{id_column} AS building_id"
@@ -115,12 +118,39 @@ def search_building_master(
         # TODO: building_id 매핑 필요. building_master의 안정적인 PK 컬럼이 확인되면 alias로 매핑한다.
         id_select = "NULL AS building_id"
 
-    where_clause = """
-        WHERE
-          plat_plc ILIKE :search
-          OR road_address ILIKE :search
-          OR sgg_cd_nm ILIKE :search
-          OR bjd_cd_nm ILIKE :search
+    where_parts = []
+    params: Dict[str, Any] = {
+        "limit": limit,
+        "offset": offset,
+    }
+
+    if district_value:
+        where_parts.append("sgg_cd_nm = :district")
+        params["district"] = district_value
+
+    if dong_value:
+        where_parts.append("bjd_cd_nm = :dong")
+        params["dong"] = dong_value
+
+    if keyword:
+        where_parts.append("(plat_plc ILIKE :search OR road_address ILIKE :search)")
+        params["search"] = f"%{keyword}%"
+        params["prefix"] = f"{keyword}%"
+
+    where_clause = "WHERE " + " AND ".join(where_parts)
+    order_clause = """
+        ORDER BY
+          CASE
+            WHEN road_address ILIKE :prefix THEN 0
+            WHEN plat_plc ILIKE :prefix THEN 1
+            ELSE 2
+          END,
+          road_address NULLS LAST,
+          plat_plc NULLS LAST
+    """ if keyword else """
+        ORDER BY
+          road_address NULLS LAST,
+          plat_plc NULLS LAST
     """
 
     # TODO: 60만 건 이상에서 total count가 병목이면 approximate count 또는 has_next 중심 페이지네이션으로 개선한다.
@@ -129,7 +159,7 @@ def search_building_master(
         FROM building_master
         {where_clause}
     """)
-    total = int(db.execute(total_statement, {"search": search}).scalar_one())
+    total = int(db.execute(total_statement, params).scalar_one())
 
     items_statement = text(f"""
         SELECT
@@ -141,25 +171,10 @@ def search_building_master(
           COALESCE(NULLIF(road_address, ''), NULLIF(plat_plc, ''), '') AS display_address
         FROM building_master
         {where_clause}
-        ORDER BY
-          CASE
-            WHEN road_address ILIKE :prefix THEN 0
-            WHEN plat_plc ILIKE :prefix THEN 1
-            ELSE 2
-          END,
-          road_address NULLS LAST,
-          plat_plc NULLS LAST
+        {order_clause}
         LIMIT :limit OFFSET :offset
     """)
-    rows = db.execute(
-        items_statement,
-        {
-            "search": search,
-            "prefix": prefix,
-            "limit": limit,
-            "offset": offset,
-        },
-    ).mappings().all()
+    rows = db.execute(items_statement, params).mappings().all()
 
     return {
         "items": [dict(row) for row in rows],
@@ -168,6 +183,29 @@ def search_building_master(
         "total": total,
         "has_next": offset + limit < total,
     }
+
+
+def get_building_master_districts(db: Session) -> List[str]:
+    statement = text("""
+        SELECT DISTINCT sgg_cd_nm
+        FROM building_master
+        WHERE sgg_cd_nm IS NOT NULL AND sgg_cd_nm <> ''
+        ORDER BY sgg_cd_nm
+    """)
+    return [row[0] for row in db.execute(statement).all()]
+
+
+def get_building_master_dongs(db: Session, district: str) -> List[str]:
+    district_value = district.strip()
+    statement = text("""
+        SELECT DISTINCT bjd_cd_nm
+        FROM building_master
+        WHERE sgg_cd_nm = :district
+          AND bjd_cd_nm IS NOT NULL
+          AND bjd_cd_nm <> ''
+        ORDER BY bjd_cd_nm
+    """)
+    return [row[0] for row in db.execute(statement, {"district": district_value}).all()]
 
 
 def get_energy_records_for_building(db: Session, building_id: int) -> List[BuildingEnergyMonthly]:

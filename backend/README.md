@@ -86,7 +86,9 @@ PowerShell 확인:
 
 ```powershell
 Invoke-RestMethod "http://localhost:8080/api/db-health"
-Invoke-RestMethod "http://localhost:8080/api/buildings?query=송파&page=1&limit=20"
+Invoke-RestMethod "http://localhost:8080/api/districts"
+Invoke-RestMethod "http://localhost:8080/api/dongs?district=서울특별시 송파구"
+Invoke-RestMethod "http://localhost:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&page=1&limit=20"
 ```
 
 ## 6. Supabase `building_master` 주소 검색
@@ -100,17 +102,26 @@ Invoke-RestMethod "http://localhost:8080/api/buildings?query=송파&page=1&limit
 - `sgg_cd_nm`: 시군구명
 - `bjd_cd_nm`: 법정동명
 
-검색 API:
+구/동 필터 API:
 
 ```bash
-curl "http://127.0.0.1:8080/api/buildings?query=송파&page=1&limit=20"
+curl "http://127.0.0.1:8080/api/districts"
+curl "http://127.0.0.1:8080/api/dongs?district=서울특별시 송파구"
 ```
+
+주소 검색 API:
+
+```bash
+curl "http://127.0.0.1:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&page=1&limit=20"
+```
+
+`district`, `dong`, `query`는 선택값입니다. 단, 아무 조건도 없으면 60만 건 전체를 반환하지 않고 빈 결과를 반환합니다. `limit` 기본값은 20이고 최대 50입니다.
 
 응답은 `items`, `page`, `limit`, `total`, `has_next`를 포함합니다. 각 item은 `building_id`, `plat_plc`, `road_address`, `sgg_cd_nm`, `bjd_cd_nm`, `display_address`만 반환합니다.
 
 `display_address`는 `road_address`가 있으면 도로명주소를 사용하고, 없으면 `plat_plc`를 사용합니다.
 
-`ILIKE '%검색어%'` 검색은 기본 B-tree 인덱스를 잘 쓰지 못하므로 `pg_trgm` GIN 인덱스가 필요합니다. Supabase SQL Editor에서 [sql/search_indexes.sql](sql/search_indexes.sql)을 실행하세요.
+`plat_plc`, `road_address`의 `ILIKE '%검색어%'` 검색은 기본 B-tree 인덱스를 잘 쓰지 못하므로 `pg_trgm` GIN 인덱스가 필요합니다. `sgg_cd_nm`, `bjd_cd_nm`은 구/동 드롭다운과 exact match 필터를 위해 btree 인덱스를 사용합니다. Supabase SQL Editor에서 [sql/search_indexes.sql](sql/search_indexes.sql)을 실행하세요.
 
 ## 7. `/api/report` 호출 예시
 

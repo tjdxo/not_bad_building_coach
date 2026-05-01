@@ -117,7 +117,7 @@ function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
 
 async function getSuggestions() {
   try {
-    const result = await searchBuildings("서울", 1, 6);
+    const result = await searchBuildings({ district: "서울특별시 송파구", page: 1, limit: 6 });
     return result.items;
   } catch {
     return [];
@@ -146,19 +146,12 @@ export default async function DashboardPage({
             <p className="mx-auto mt-4 max-w-2xl text-slate-600">
               백엔드에 등록된 건물을 검색한 뒤 선택하면 전기·가스 사용량과 정책 정보를 확인할 수 있습니다.
             </p>
-            <form action="/search" className="mx-auto mt-8 max-w-2xl rounded-3xl border border-slate-200 bg-slate-50 p-2">
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  name="query"
-                  type="text"
-                  placeholder="예: 성수 그린타워"
-                  className="h-14 flex-1 rounded-2xl bg-white px-5 text-base outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <button type="submit" className="h-14 rounded-2xl bg-emerald-600 px-7 text-sm font-black text-white">
-                  건물 검색
-                </button>
-              </div>
-            </form>
+            <Link
+              href="/search"
+              className="mt-8 inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white"
+            >
+              건물 검색하기
+            </Link>
           </section>
 
           <BuildingPicker buildings={suggestions.slice(0, 6)} />

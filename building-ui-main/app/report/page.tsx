@@ -57,7 +57,7 @@ function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
 
 async function getSuggestions() {
   try {
-    const result = await searchBuildings("서울", 1, 6);
+    const result = await searchBuildings({ district: "서울특별시 송파구", page: 1, limit: 6 });
     return result.items;
   } catch {
     return [];
