@@ -5,39 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   createReportForBuilding,
   dashboardHref,
-  getDistricts,
-  getDongs,
   searchBuildings,
   type BuildingSearchItem,
 } from "@/lib/building-api";
-
-const SEOUL_DISTRICTS = [
-  "서울특별시 강남구",
-  "서울특별시 강동구",
-  "서울특별시 강북구",
-  "서울특별시 강서구",
-  "서울특별시 관악구",
-  "서울특별시 광진구",
-  "서울특별시 구로구",
-  "서울특별시 금천구",
-  "서울특별시 노원구",
-  "서울특별시 도봉구",
-  "서울특별시 동대문구",
-  "서울특별시 동작구",
-  "서울특별시 마포구",
-  "서울특별시 서대문구",
-  "서울특별시 서초구",
-  "서울특별시 성동구",
-  "서울특별시 성북구",
-  "서울특별시 송파구",
-  "서울특별시 양천구",
-  "서울특별시 영등포구",
-  "서울특별시 용산구",
-  "서울특별시 은평구",
-  "서울특별시 종로구",
-  "서울특별시 중구",
-  "서울특별시 중랑구",
-];
+import { SEOUL_DISTRICTS, SEOUL_DONGS_BY_DISTRICT } from "@/lib/seoul-address";
 
 const LIMIT = 20;
 
@@ -47,8 +18,6 @@ function shortDistrictName(district: string) {
 
 export default function SearchPage() {
   const router = useRouter();
-  const [districts, setDistricts] = useState<string[]>(SEOUL_DISTRICTS);
-  const [dongs, setDongs] = useState<string[]>([]);
   const [district, setDistrict] = useState("");
   const [dong, setDong] = useState("");
   const [query, setQuery] = useState("");
@@ -58,48 +27,28 @@ export default function SearchPage() {
   const [total, setTotal] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [dongsLoading, setDongsLoading] = useState(false);
-  const [dongsError, setDongsError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / LIMIT)), [total]);
+  const dongs = useMemo(() => {
+    if (!district) {
+      return [];
+    }
+
+    return SEOUL_DONGS_BY_DISTRICT[district as keyof typeof SEOUL_DONGS_BY_DISTRICT] ?? [];
+  }, [district]);
   const canSearch = Boolean(district || dong || query.trim());
 
   useEffect(() => {
-    getDistricts()
-      .then((data) => {
-        const seoulOnly = data.filter((item) => item.startsWith("서울특별시 "));
-        setDistricts(seoulOnly.length ? seoulOnly : SEOUL_DISTRICTS);
-      })
-      .catch(() => {
-        setDistricts(SEOUL_DISTRICTS);
-      });
-  }, []);
-
-  useEffect(() => {
     setDong("");
-    setDongs([]);
     setItems([]);
     setTotal(0);
     setHasNext(false);
     setSearched(false);
     setPage(1);
-    setDongsError("");
     setSelectedBuilding(null);
-    if (!district) {
-      return;
-    }
-
-    setDongsLoading(true);
-    getDongs(district)
-      .then(setDongs)
-      .catch(() => {
-        setDongs([]);
-        setDongsError("동 목록을 불러오지 못했습니다.");
-      })
-      .finally(() => setDongsLoading(false));
   }, [district]);
 
   const runSearch = async (nextPage = 1) => {
@@ -177,14 +126,15 @@ export default function SearchPage() {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 lg:grid-cols-[0.8fr_1fr_1fr_1.4fr_auto] lg:items-end">
-              <div>
+              <div className="flex min-h-[112px] flex-col">
                 <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">시도</label>
                 <div className="mt-2 flex h-14 items-center rounded-2xl bg-emerald-50 px-4 text-sm font-black text-emerald-700 ring-1 ring-emerald-100">
                   서울특별시
                 </div>
+                <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
-              <div>
+              <div className="flex min-h-[112px] flex-col">
                 <label htmlFor="district" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                   구 선택
                 </label>
@@ -192,18 +142,19 @@ export default function SearchPage() {
                   id="district"
                   value={district}
                   onChange={(event) => setDistrict(event.target.value)}
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 >
                   <option value="">전체 구</option>
-                  {districts.map((item) => (
+                  {SEOUL_DISTRICTS.map((item) => (
                     <option key={item} value={item}>
                       {shortDistrictName(item)}
                     </option>
                   ))}
                 </select>
+                <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
-              <div>
+              <div className="flex min-h-[112px] flex-col">
                 <label htmlFor="dong" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                   동 선택
                 </label>
@@ -214,28 +165,20 @@ export default function SearchPage() {
                     setDong(event.target.value);
                     setSelectedBuilding(null);
                   }}
-                  disabled={!district || dongsLoading}
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  disabled={!district}
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  <option value="">
-                    {!district
-                      ? "구를 먼저 선택하세요"
-                      : dongsLoading
-                        ? "동 목록 불러오는 중..."
-                        : "전체 동"}
-                  </option>
+                  <option value="">{district ? "전체 동" : "구를 먼저 선택하세요"}</option>
                   {dongs.map((item) => (
                     <option key={item} value={item}>
                       {item}
                     </option>
                   ))}
                 </select>
-                {dongsError && (
-                  <p className="mt-2 text-xs font-bold text-red-600">{dongsError}</p>
-                )}
+                <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
-              <div>
+              <div className="flex min-h-[112px] flex-col">
                 <label htmlFor="query" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                   상세 검색어
                 </label>
@@ -249,12 +192,13 @@ export default function SearchPage() {
                   placeholder="예: 성내천로, 거여동 362, 33다길 2"
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
+                <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
               <button
                 type="submit"
                 disabled={loading || !canSearch}
-                className="h-14 rounded-2xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mb-7 h-14 rounded-2xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "검색 중..." : "주소 검색"}
               </button>
