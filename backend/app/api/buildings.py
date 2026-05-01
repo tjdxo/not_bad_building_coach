@@ -1,4 +1,4 @@
-from typing import List
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
@@ -12,9 +12,9 @@ router = APIRouter(tags=["buildings"])
 
 @router.get("/buildings", response_model=schemas.BuildingSearchResponse)
 def search_buildings(
-    district: str = Query(default=""),
-    dong: str = Query(default=""),
-    query: str = Query(default=""),
+    district: Optional[str] = Query(default=None),
+    dong: Optional[str] = Query(default=None),
+    query: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
@@ -40,10 +40,10 @@ def search_buildings(
         ) from exc
 
 
-@router.get("/districts", response_model=List[str])
-def get_districts(db: Session = Depends(get_db)) -> List[str]:
+@router.get("/districts", response_model=schemas.StringItemsResponse)
+def get_districts(db: Session = Depends(get_db)) -> schemas.StringItemsResponse:
     try:
-        return crud.get_building_master_districts(db)
+        return schemas.StringItemsResponse(items=crud.get_building_master_districts(db))
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500,
@@ -51,13 +51,13 @@ def get_districts(db: Session = Depends(get_db)) -> List[str]:
         ) from exc
 
 
-@router.get("/dongs", response_model=List[str])
+@router.get("/dongs", response_model=schemas.StringItemsResponse)
 def get_dongs(
     district: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
-) -> List[str]:
+) -> schemas.StringItemsResponse:
     try:
-        return crud.get_building_master_dongs(db, district=district)
+        return schemas.StringItemsResponse(items=crud.get_building_master_dongs(db, district=district))
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500,

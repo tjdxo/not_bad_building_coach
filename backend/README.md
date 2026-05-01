@@ -109,6 +109,8 @@ curl "http://127.0.0.1:8080/api/districts"
 curl "http://127.0.0.1:8080/api/dongs?district=서울특별시 송파구"
 ```
 
+응답은 `{ "items": [...] }` 형식입니다.
+
 주소 검색 API:
 
 ```bash

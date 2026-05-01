@@ -42,6 +42,10 @@ class BuildingSearchResponse(BaseModel):
     has_next: bool
 
 
+class StringItemsResponse(BaseModel):
+    items: List[str]
+
+
 class EnergySummary(BaseModel):
     target_avg_electricity_kwh: float
     target_avg_gas_m3: float

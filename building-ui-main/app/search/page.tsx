@@ -59,6 +59,7 @@ export default function SearchPage() {
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dongsLoading, setDongsLoading] = useState(false);
+  const [dongsError, setDongsError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
@@ -85,6 +86,7 @@ export default function SearchPage() {
     setHasNext(false);
     setSearched(false);
     setPage(1);
+    setDongsError("");
     setSelectedBuilding(null);
     if (!district) {
       return;
@@ -93,7 +95,10 @@ export default function SearchPage() {
     setDongsLoading(true);
     getDongs(district)
       .then(setDongs)
-      .catch(() => setDongs([]))
+      .catch(() => {
+        setDongs([]);
+        setDongsError("동 목록을 불러오지 못했습니다.");
+      })
       .finally(() => setDongsLoading(false));
   }, [district]);
 
@@ -212,13 +217,22 @@ export default function SearchPage() {
                   disabled={!district || dongsLoading}
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  <option value="">{dongsLoading ? "동 불러오는 중" : "전체 동"}</option>
+                  <option value="">
+                    {!district
+                      ? "구를 먼저 선택하세요"
+                      : dongsLoading
+                        ? "동 목록 불러오는 중..."
+                        : "전체 동"}
+                  </option>
                   {dongs.map((item) => (
                     <option key={item} value={item}>
                       {item}
                     </option>
                   ))}
                 </select>
+                {dongsError && (
+                  <p className="mt-2 text-xs font-bold text-red-600">{dongsError}</p>
+                )}
               </div>
 
               <div>

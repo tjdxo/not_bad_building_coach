@@ -53,6 +53,7 @@ To verify the connection:
 - Click a candidate and confirm `선택한 건물로 진단 시작` is enabled.
 - Confirm the Network tab shows `GET http://localhost:8080/api/districts`.
 - Confirm the Network tab shows `GET http://localhost:8080/api/dongs?district=...`.
+- Confirm the district and dong APIs return `{ "items": [...] }`.
 - Confirm the Network tab shows `GET http://localhost:8080/api/buildings?district=...&dong=...&query=...&page=1&limit=20`.
 - Confirm the Network tab shows `POST http://localhost:8080/api/report` with status `200`.
 - Confirm the page moves to `/dashboard?address=...`.

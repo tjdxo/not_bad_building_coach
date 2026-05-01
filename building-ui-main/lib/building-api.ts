@@ -28,6 +28,10 @@ export type BuildingSearchResponse = {
   has_next: boolean;
 };
 
+export type StringItemsResponse = {
+  items: string[];
+};
+
 export type MonthlyEnergyPoint = {
   year: number;
   month: number;
@@ -117,7 +121,8 @@ export async function getDistricts() {
     throw new Error(`구 목록 API 오류: ${response.status}`);
   }
 
-  return (await response.json()) as string[];
+  const data = (await response.json()) as StringItemsResponse;
+  return data.items;
 }
 
 export async function getDongs(district: string) {
@@ -130,7 +135,8 @@ export async function getDongs(district: string) {
     throw new Error(`동 목록 API 오류: ${response.status}`);
   }
 
-  return (await response.json()) as string[];
+  const data = (await response.json()) as StringItemsResponse;
+  return data.items;
 }
 
 export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
