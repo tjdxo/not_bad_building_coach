@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Union
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,7 +40,7 @@ def read_root() -> Dict[str, str]:
 
 
 @app.get("/api/db-health")
-def db_health() -> Dict[str, int | str]:
+def db_health() -> Dict[str, Union[int, str]]:
     try:
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1")).scalar()
