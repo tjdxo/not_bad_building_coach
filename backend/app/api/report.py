@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
@@ -36,7 +36,7 @@ def _coerce_bool(value: Any) -> bool:
     return False
 
 
-def _format_use_ym(value: Any) -> tuple[int, int, str, str]:
+def _format_use_ym(value: Any) -> Tuple[int, int, str, str]:
     if isinstance(value, datetime):
         year = value.year
         month = value.month
