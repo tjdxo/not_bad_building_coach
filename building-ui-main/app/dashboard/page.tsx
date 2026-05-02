@@ -4,6 +4,7 @@ import {
   dashboardHref,
   estimateCarbonSaving,
   fetchReport,
+  fetchReportForParams,
   formatArea,
   formatBuildingType,
   getMonthlyEnergy,
@@ -24,7 +25,7 @@ type ChartPoint = {
 
 function buildChartData(report: ReportApiResponse, source: "electricity" | "gas") {
   return getMonthlyEnergy(report).map((item) => ({
-    month: `${item.month}월`,
+    month: item.label || `${item.month}월`,
     value: source === "electricity" ? item.target_electricity_kwh : item.target_gas_m3,
     avg: source === "electricity" ? item.peer_avg_electricity_kwh : item.peer_avg_gas_m3,
   }));
@@ -82,7 +83,7 @@ function BarChart({
               <div className="w-2 rounded-t bg-slate-200" style={{ height: `${(item.avg / maxValue) * 160}px` }} />
               <div className={`w-3 rounded-t ${colorClass}`} style={{ height: `${(item.value / maxValue) * 160}px` }} />
             </div>
-            <span className="text-[10px] font-bold text-slate-400">{item.month.replace("월", "")}</span>
+            <span className="text-[10px] font-bold text-slate-400">{item.month}</span>
           </div>
         ))}
       </div>
@@ -127,7 +128,19 @@ async function getSuggestions() {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ address?: string; building?: string; query?: string }>;
+  searchParams: Promise<{
+    address?: string;
+    building?: string;
+    query?: string;
+    building_id?: string;
+    plat_plc?: string;
+    road_address?: string;
+    bld_nm?: string;
+    dong_nm?: string;
+    grs_ar?: string;
+    agnd_flr?: string;
+    energy_mode?: string;
+  }>;
 }) {
   const params = await searchParams;
   const address = resolveAddressParam(params);
@@ -164,7 +177,18 @@ export default async function DashboardPage({
   let error = "";
 
   try {
-    report = await fetchReport(address);
+    report = params.building_id
+      ? await fetchReportForParams({
+          address,
+          building_id: params.building_id,
+          plat_plc: params.plat_plc,
+          road_address: params.road_address,
+          bld_nm: params.bld_nm,
+          dong_nm: params.dong_nm,
+          grs_ar: params.grs_ar,
+          agnd_flr: params.agnd_flr,
+        })
+      : await fetchReport(address);
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : "진단 리포트를 불러오지 못했습니다.";
   }
@@ -192,6 +216,77 @@ export default async function DashboardPage({
   }
 
   const building = report.building;
+  const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
+    address: building.display_address || building.road_address || address,
+    building_id: String(building.building_id ?? building.id ?? ""),
+  }).toString()}`;
+
+  if (report.status === "energy_data_missing" || report.energy?.source === "none") {
+    return (
+      <main className="min-h-screen bg-slate-50 py-16">
+        <div className="mx-auto max-w-4xl px-6">
+          <section className="rounded-[2rem] border border-amber-100 bg-white p-8 shadow-sm sm:p-12">
+            <p className="text-sm font-black tracking-[0.25em] text-amber-600">데이터 없음</p>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">
+              공공 에너지 사용량 데이터가 없습니다.
+            </h1>
+            <p className="mt-4 text-slate-600">
+              {report.message || "이 건물은 현재 공공 에너지 사용량 데이터와 직접 매칭되지 않았습니다."}
+            </p>
+            <div className="mt-6 rounded-2xl bg-slate-50 p-5">
+              <div className="text-lg font-black text-slate-950">{building.display_address || building.road_address}</div>
+              <p className="mt-2 text-sm font-semibold text-slate-500">{building.jibun_address}</p>
+              {[building.bld_nm, building.dong_nm].filter(Boolean).length > 0 && (
+                <p className="mt-2 text-sm font-black text-emerald-700">
+                  {[building.bld_nm, building.dong_nm].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </div>
+            <p className="mt-8 text-sm font-semibold leading-6 text-slate-600">
+              다음 방법 중 하나를 선택해 진단을 계속할 수 있습니다.
+            </p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={manualEnergyHref}
+                className="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white"
+              >
+                내 사용량 직접 입력하기
+              </Link>
+              <Link
+                href={`/dashboard?${new URLSearchParams({ address, energy_mode: "ai_placeholder" }).toString()}`}
+                className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700"
+              >
+                AI 추정값으로 진단 보기
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (params.energy_mode === "ai_placeholder") {
+    return (
+      <main className="min-h-screen bg-slate-50 py-16">
+        <div className="mx-auto max-w-4xl px-6">
+          <section className="rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-sm sm:p-12">
+            <p className="text-sm font-black tracking-[0.25em] text-emerald-600">AI 추정 준비 중</p>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">AI 기반 사용량 추정 기능은 준비 중입니다.</h1>
+            <p className="mt-4 text-slate-600">
+              현재 화면은 예시값을 생성하지 않습니다. 실제 고지서나 관리비 명세서 값을 입력하면 임시 진단 흐름으로 이어갈 수 있습니다.
+            </p>
+            <Link
+              href={manualEnergyHref}
+              className="mt-8 inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white"
+            >
+              직접 값 입력하기
+            </Link>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   const electricityData = buildChartData(report, "electricity");
   const gasData = buildChartData(report, "gas");
   const actions = buildActions(report);
@@ -208,6 +303,18 @@ export default async function DashboardPage({
               <p className="mt-3 text-slate-600">
                 {building.road_address} · {formatBuildingType(building.building_type)} · {formatArea(building.gross_floor_area)}
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {report.energy?.source === "db" && (
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                    공공 데이터 기준
+                  </span>
+                )}
+                {report.energy?.is_estimated_included && (
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+                    추정 포함
+                  </span>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
@@ -231,6 +338,11 @@ export default async function DashboardPage({
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 kWh 기준 비교</p>
+            {report.energy?.is_estimated_included && (
+              <p className="mt-3 text-xs font-bold text-amber-700">
+                일부 월별 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
+              </p>
+            )}
             <BarChart data={electricityData} colorClass="bg-emerald-500" unit="kWh" />
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">

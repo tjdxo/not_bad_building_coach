@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   createReportForBuilding,
-  dashboardHref,
+  dashboardHrefForBuilding,
   searchBuildings,
   type BuildingSearchItem,
 } from "@/lib/building-api";
@@ -14,6 +14,21 @@ const LIMIT = 20;
 
 function shortDistrictName(district: string) {
   return district.replace("서울특별시 ", "");
+}
+
+function buildingIdentity(building: BuildingSearchItem) {
+  return [building.bld_nm, building.dong_nm].filter(Boolean).join(" · ");
+}
+
+function buildingScale(building: BuildingSearchItem) {
+  const parts = [];
+  if (building.grs_ar && building.grs_ar > 0) {
+    parts.push(`연면적 ${building.grs_ar.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}㎡`);
+  }
+  if (building.agnd_flr && building.agnd_flr > 0) {
+    parts.push(`지상 ${building.agnd_flr.toLocaleString("ko-KR")}층`);
+  }
+  return parts.join(" · ");
 }
 
 export default function SearchPage() {
@@ -102,8 +117,8 @@ export default function SearchPage() {
     setError("");
 
     try {
-      const report = await createReportForBuilding(selectedBuilding);
-      router.push(dashboardHref(report.building.road_address || selectedBuilding.display_address));
+      await createReportForBuilding(selectedBuilding);
+      router.push(dashboardHrefForBuilding(selectedBuilding));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "진단 요청 중 오류가 발생했습니다.");
     } finally {
@@ -245,6 +260,8 @@ export default function SearchPage() {
                 const subAddressClass = selected
                   ? "mt-2 text-sm font-semibold leading-6 text-white/90"
                   : "mt-2 text-sm font-semibold leading-6 text-slate-600";
+                const identity = buildingIdentity(building);
+                const scale = buildingScale(building);
 
                 return (
                   <button
@@ -263,10 +280,20 @@ export default function SearchPage() {
                         <h3 className={addressClass}>
                           {building.road_address || building.display_address}
                         </h3>
+                        {identity && (
+                          <p className={selected ? "mt-2 text-sm font-black text-emerald-50" : "mt-2 text-sm font-black text-slate-700"}>
+                            {identity}
+                          </p>
+                        )}
                         <div className={mutedLabelClass}>지번주소</div>
                         <p className={subAddressClass}>
                           {building.plat_plc || "지번 주소 정보 없음"}
                         </p>
+                        {scale && (
+                          <p className={selected ? "mt-3 text-xs font-bold text-white/80" : "mt-3 text-xs font-bold text-slate-500"}>
+                            {scale}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 md:justify-end">
                         {[building.sgg_cd_nm, building.bjd_cd_nm].filter(Boolean).map((item) => (
@@ -328,9 +355,19 @@ export default function SearchPage() {
                   <h2 className="text-lg font-black leading-7 text-slate-950">
                     {selectedBuilding.display_address}
                   </h2>
+                  {buildingIdentity(selectedBuilding) && (
+                    <p className="mt-2 text-sm font-black text-emerald-700">
+                      {buildingIdentity(selectedBuilding)}
+                    </p>
+                  )}
                   <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
                     {selectedBuilding.plat_plc}
                   </p>
+                  {buildingScale(selectedBuilding) && (
+                    <p className="mt-3 text-xs font-bold text-slate-500">
+                      {buildingScale(selectedBuilding)}
+                    </p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {[selectedBuilding.sgg_cd_nm, selectedBuilding.bjd_cd_nm].filter(Boolean).map((item) => (
                       <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -366,6 +403,11 @@ export default function SearchPage() {
               <p className="truncate text-sm font-black text-slate-950">
                 {selectedBuilding.display_address}
               </p>
+              {buildingIdentity(selectedBuilding) && (
+                <p className="truncate text-xs font-black text-emerald-700">
+                  {buildingIdentity(selectedBuilding)}
+                </p>
+              )}
               <p className="truncate text-xs font-semibold text-slate-500">
                 {selectedBuilding.plat_plc}
               </p>

@@ -175,6 +175,10 @@ def search_building_master(
           road_address,
           sgg_cd_nm,
           bjd_cd_nm,
+          bld_nm,
+          dong_nm,
+          grs_ar,
+          agnd_flr,
           COALESCE(NULLIF(road_address, ''), NULLIF(plat_plc, ''), '') AS display_address
         FROM building_master
         {where_clause}
@@ -213,6 +217,44 @@ def get_building_master_dongs(db: Session, district: str) -> List[str]:
         ORDER BY bjd_cd_nm
     """)
     return [row[0] for row in db.execute(statement, {"district": district_value}).all()]
+
+
+def get_building_master_by_id(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
+    id_column = _get_building_master_id_column(db)
+    if not id_column:
+        return None
+
+    statement = text(f"""
+        SELECT
+          {id_column} AS building_id,
+          plat_plc,
+          road_address,
+          sgg_cd_nm,
+          bjd_cd_nm,
+          bld_nm,
+          dong_nm,
+          grs_ar,
+          agnd_flr,
+          COALESCE(NULLIF(road_address, ''), NULLIF(plat_plc, ''), '') AS display_address
+        FROM building_master
+        WHERE {id_column} = :building_id
+        LIMIT 1
+    """)
+    row = db.execute(statement, {"building_id": building_id}).mappings().first()
+    return dict(row) if row else None
+
+
+def get_energy_usage_for_master_building(db: Session, building_id: Any) -> List[Dict[str, Any]]:
+    statement = text("""
+        SELECT
+          use_ym,
+          elec_qty AS electricity_kwh,
+          is_estimated
+        FROM energy_usage
+        WHERE building_id = :building_id
+        ORDER BY use_ym ASC
+    """)
+    return [dict(row) for row in db.execute(statement, {"building_id": building_id}).mappings().all()]
 
 
 def get_energy_records_for_building(db: Session, building_id: int) -> List[BuildingEnergyMonthly]:

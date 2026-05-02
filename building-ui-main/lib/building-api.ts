@@ -1,5 +1,6 @@
 export type ApiBuilding = {
   id: number;
+  building_id?: string | number | null;
   building_code: string;
   name: string;
   road_address: string;
@@ -9,6 +10,12 @@ export type ApiBuilding = {
   approval_year: number;
   floors: number;
   elevator_count: number;
+  display_address?: string | null;
+  plat_plc?: string | null;
+  bld_nm?: string | null;
+  dong_nm?: string | null;
+  grs_ar?: number | null;
+  agnd_flr?: number | null;
 };
 
 export type BuildingSearchItem = {
@@ -18,6 +25,10 @@ export type BuildingSearchItem = {
   sgg_cd_nm: string | null;
   bjd_cd_nm: string | null;
   display_address: string;
+  bld_nm: string | null;
+  dong_nm: string | null;
+  grs_ar: number | null;
+  agnd_flr: number | null;
 };
 
 export type BuildingSearchResponse = {
@@ -35,10 +46,30 @@ export type MonthlyEnergyPoint = {
   target_gas_m3: number;
   peer_avg_electricity_kwh: number;
   peer_avg_gas_m3: number;
+  use_ym?: string | null;
+  label?: string | null;
+  is_estimated?: boolean | null;
+};
+
+export type ElectricityMonthlyPoint = {
+  use_ym: string;
+  label: string;
+  value: number;
+  is_estimated: boolean;
+};
+
+export type ReportEnergyInfo = {
+  source: "db" | "none" | "manual" | "ai_placeholder" | "legacy";
+  has_data: boolean;
+  is_estimated_included: boolean;
+  electricity_monthly: ElectricityMonthlyPoint[];
 };
 
 export type ReportApiResponse = {
+  status?: "ok" | "energy_data_missing";
+  message?: string | null;
   building: ApiBuilding;
+  energy?: ReportEnergyInfo | null;
   energy_summary: {
     target_avg_electricity_kwh: number;
     target_avg_gas_m3: number;
@@ -90,6 +121,22 @@ export function resolveAddressParam(params: {
 
 export function dashboardHref(address: string) {
   return `/dashboard?address=${encodeURIComponent(address)}`;
+}
+
+export function dashboardHrefForBuilding(building: BuildingSearchItem) {
+  const params = new URLSearchParams();
+  const address = building.display_address || building.road_address || building.plat_plc || "";
+  params.set("address", address);
+  if (building.building_id !== null && building.building_id !== undefined) {
+    params.set("building_id", String(building.building_id));
+  }
+  if (building.plat_plc) params.set("plat_plc", building.plat_plc);
+  if (building.road_address) params.set("road_address", building.road_address);
+  if (building.bld_nm) params.set("bld_nm", building.bld_nm);
+  if (building.dong_nm) params.set("dong_nm", building.dong_nm);
+  if (building.grs_ar) params.set("grs_ar", String(building.grs_ar));
+  if (building.agnd_flr) params.set("agnd_flr", String(building.agnd_flr));
+  return `/dashboard?${params.toString()}`;
 }
 
 export function reportHref(address: string) {
@@ -161,6 +208,10 @@ export async function createReportForBuilding(building: BuildingSearchItem) {
       address,
       plat_plc: building.plat_plc,
       road_address: building.road_address,
+      bld_nm: building.bld_nm,
+      dong_nm: building.dong_nm,
+      grs_ar: building.grs_ar,
+      agnd_flr: building.agnd_flr,
     }),
   });
 
@@ -182,6 +233,47 @@ export async function fetchReport(address: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ address }),
+    cache: "no-store",
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const message =
+      typeof payload?.detail === "string" ? payload.detail : `리포트 API 오류: ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload as ReportApiResponse;
+}
+
+export async function fetchReportForParams(params: {
+  address: string;
+  building_id?: string;
+  plat_plc?: string;
+  road_address?: string;
+  bld_nm?: string;
+  dong_nm?: string;
+  grs_ar?: string;
+  agnd_flr?: string;
+}) {
+  const body: Record<string, string | number> = {
+    address: params.address,
+  };
+  if (params.building_id) body.building_id = params.building_id;
+  if (params.plat_plc) body.plat_plc = params.plat_plc;
+  if (params.road_address) body.road_address = params.road_address;
+  if (params.bld_nm) body.bld_nm = params.bld_nm;
+  if (params.dong_nm) body.dong_nm = params.dong_nm;
+  if (params.grs_ar) body.grs_ar = Number(params.grs_ar);
+  if (params.agnd_flr) body.agnd_flr = Number(params.agnd_flr);
+
+  const response = await fetch(`${API_BASE_URL}/api/report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
     cache: "no-store",
   });
 
@@ -240,7 +332,21 @@ export function estimateCarbonSaving(report: ReportApiResponse) {
   return Math.max(0.1, electricityTons + gasTons);
 }
 
-export function getMonthlyEnergy(report: ReportApiResponse) {
+export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[] {
+  if (report.energy?.electricity_monthly?.length) {
+    return report.energy.electricity_monthly.map((item) => ({
+      year: Number(item.label.slice(0, 4)),
+      month: Number(item.label.slice(5, 7)),
+      use_ym: item.use_ym,
+      label: item.label,
+      is_estimated: item.is_estimated,
+      target_electricity_kwh: item.value,
+      target_gas_m3: 0,
+      peer_avg_electricity_kwh: item.value,
+      peer_avg_gas_m3: 0,
+    }));
+  }
+
   if (report.monthly_energy?.length) {
     return report.monthly_energy;
   }

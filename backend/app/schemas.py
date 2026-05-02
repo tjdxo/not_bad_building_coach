@@ -8,6 +8,10 @@ class ReportRequest(BaseModel):
     building_id: Optional[Any] = None
     plat_plc: Optional[str] = None
     road_address: Optional[str] = None
+    bld_nm: Optional[str] = None
+    dong_nm: Optional[str] = None
+    grs_ar: Optional[float] = None
+    agnd_flr: Optional[int] = None
 
 
 class BuildingInfo(BaseModel):
@@ -21,6 +25,13 @@ class BuildingInfo(BaseModel):
     approval_year: int
     floors: int
     elevator_count: int
+    building_id: Optional[Any] = None
+    display_address: Optional[str] = None
+    plat_plc: Optional[str] = None
+    bld_nm: Optional[str] = None
+    dong_nm: Optional[str] = None
+    grs_ar: Optional[float] = None
+    agnd_flr: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -32,6 +43,10 @@ class BuildingSearchItem(BaseModel):
     sgg_cd_nm: Optional[str] = None
     bjd_cd_nm: Optional[str] = None
     display_address: str
+    bld_nm: Optional[str] = None
+    dong_nm: Optional[str] = None
+    grs_ar: Optional[float] = None
+    agnd_flr: Optional[int] = None
 
 
 class BuildingSearchResponse(BaseModel):
@@ -69,12 +84,32 @@ class MonthlyEnergyPoint(BaseModel):
     target_gas_m3: float
     peer_avg_electricity_kwh: float
     peer_avg_gas_m3: float
+    use_ym: Optional[str] = None
+    label: Optional[str] = None
+    is_estimated: Optional[bool] = None
+
+
+class ElectricityMonthlyPoint(BaseModel):
+    use_ym: str
+    label: str
+    value: float
+    is_estimated: bool = False
+
+
+class ReportEnergyInfo(BaseModel):
+    source: str = "legacy"
+    has_data: bool = True
+    is_estimated_included: bool = False
+    electricity_monthly: List[ElectricityMonthlyPoint] = Field(default_factory=list)
 
 
 class ReportResponse(BaseModel):
+    status: str = "ok"
+    message: Optional[str] = None
     building: BuildingInfo
     energy_summary: EnergySummary
     analysis: AnalysisResult
     monthly_energy: List[MonthlyEnergyPoint]
     report_text: str
     raw_analysis_json: Dict[str, Any]
+    energy: Optional[ReportEnergyInfo] = None
