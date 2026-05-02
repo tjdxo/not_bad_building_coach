@@ -16,6 +16,7 @@ import {
   type BuildingSearchItem,
   type ReportApiResponse,
 } from "@/lib/building-api";
+import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 
 type ChartPoint = {
   month: string;
@@ -171,6 +172,10 @@ export default async function DashboardPage({
         </div>
       </main>
     );
+  }
+
+  if (params.energy_mode === "manual") {
+    return <ManualEnergyDashboard address={address} buildingId={params.building_id} />;
   }
 
   let report: ReportApiResponse | null = null;

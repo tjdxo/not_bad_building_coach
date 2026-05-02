@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const MONTHS = [
   "2024.11",
@@ -27,7 +27,9 @@ type ManualEnergyRow = {
 
 function ManualEnergyForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const address = searchParams.get("address") || "선택 건물";
+  const buildingId = searchParams.get("building_id") || "";
   const [rows, setRows] = useState<ManualEnergyRow[]>(
     MONTHS.map((month) => ({ month, electricity: "", gas: "" })),
   );
@@ -63,6 +65,14 @@ function ManualEnergyForm() {
       }),
     );
     setSubmitted(true);
+    const params = new URLSearchParams({
+      address,
+      energy_mode: "manual",
+    });
+    if (buildingId) {
+      params.set("building_id", buildingId);
+    }
+    router.push(`/dashboard?${params.toString()}`);
   };
 
   return (
