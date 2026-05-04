@@ -51,7 +51,7 @@ To verify the connection:
 - Select a district and dong, enter a detail keyword such as `362`, then click `주소 검색`.
 - Confirm address result cards appear in pages of 20.
 - Click a candidate and confirm `선택한 건물로 진단 시작` is enabled.
-- Confirm the Network tab shows `GET http://localhost:8080/api/buildings?district=...&dong=...&query=...&page=1&limit=20`.
+- Confirm the Network tab shows `GET http://localhost:8080/api/buildings?district=...&dong=...&query=...&building_keyword=...&page=1&limit=20` when the building name/dong filter is filled.
 - Confirm the Network tab does not show `GET /api/dongs`; district and dong options are loaded from `lib/seoul-address.ts`.
 - Confirm the Network tab shows `POST http://localhost:8080/api/report` with status `200`.
 - Confirm the page moves to `/dashboard?address=...`.

@@ -94,14 +94,16 @@ def search_building_master(
     query: Optional[str] = None,
     district: Optional[str] = None,
     dong: Optional[str] = None,
+    building_keyword: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
 ) -> Dict[str, Any]:
     keyword = query.strip() if query else ""
     district_value = district.strip() if district else ""
     dong_value = dong.strip() if dong else ""
+    building_keyword_value = building_keyword.strip() if building_keyword else ""
 
-    if not keyword and not district_value and not dong_value:
+    if not keyword and not district_value and not dong_value and not building_keyword_value:
         return {
             "items": [],
             "page": page,
@@ -143,6 +145,15 @@ def search_building_master(
         """)
         params["search"] = f"%{keyword}%"
         params["prefix"] = f"{keyword}%"
+
+    if building_keyword_value:
+        where_parts.append("""
+            (
+              bld_nm ILIKE :building_search
+              OR dong_nm ILIKE :building_search
+            )
+        """)
+        params["building_search"] = f"%{building_keyword_value}%"
 
     where_clause = "WHERE " + " AND ".join(where_parts)
     order_clause = """

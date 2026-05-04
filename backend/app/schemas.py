@@ -103,10 +103,17 @@ class ReportEnergyInfo(BaseModel):
     electricity_monthly: List[ElectricityMonthlyPoint] = Field(default_factory=list)
 
 
+class PeerGroupInfo(BaseModel):
+    rank: Optional[int] = None
+    total: Optional[int] = None
+    label: Optional[str] = None
+
+
 class ReportResponse(BaseModel):
     status: str = "ok"
     message: Optional[str] = None
     building: BuildingInfo
+    peer_group: Optional[PeerGroupInfo] = None
     energy_summary: EnergySummary
     analysis: AnalysisResult
     monthly_energy: List[MonthlyEnergyPoint]

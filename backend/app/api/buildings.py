@@ -15,6 +15,7 @@ def search_buildings(
     district: Optional[str] = Query(default=None),
     dong: Optional[str] = Query(default=None),
     query: Optional[str] = Query(default=None),
+    building_keyword: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
@@ -25,6 +26,7 @@ def search_buildings(
             district=district,
             dong=dong,
             query=query,
+            building_keyword=building_keyword,
             page=page,
             limit=limit,
         )

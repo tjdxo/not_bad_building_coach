@@ -20,14 +20,19 @@ function buildingIdentity(building: BuildingSearchItem) {
   return [building.bld_nm, building.dong_nm].filter(Boolean).join(" · ");
 }
 
-function buildingScale(building: BuildingSearchItem) {
-  const parts = [];
+function buildingScaleParts(building: BuildingSearchItem) {
+  const parts: string[] = [];
   if (building.grs_ar && building.grs_ar > 0) {
     parts.push(`연면적 ${building.grs_ar.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}㎡`);
   }
   if (building.agnd_flr && building.agnd_flr > 0) {
     parts.push(`지상 ${building.agnd_flr.toLocaleString("ko-KR")}층`);
   }
+  return parts;
+}
+
+function buildingScale(building: BuildingSearchItem) {
+  const parts = buildingScaleParts(building);
   return parts.join(" · ");
 }
 
@@ -36,6 +41,7 @@ export default function SearchPage() {
   const [district, setDistrict] = useState("");
   const [dong, setDong] = useState("");
   const [query, setQuery] = useState("");
+  const [buildingKeyword, setBuildingKeyword] = useState("");
   const [items, setItems] = useState<BuildingSearchItem[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingSearchItem | null>(null);
   const [page, setPage] = useState(1);
@@ -54,7 +60,7 @@ export default function SearchPage() {
 
     return SEOUL_DONGS_BY_DISTRICT[district as keyof typeof SEOUL_DONGS_BY_DISTRICT] ?? [];
   }, [district]);
-  const canSearch = Boolean(district || dong || query.trim());
+  const canSearch = Boolean(district || dong || query.trim() || buildingKeyword.trim());
 
   useEffect(() => {
     setDong("");
@@ -68,7 +74,7 @@ export default function SearchPage() {
 
   const runSearch = async (nextPage = 1) => {
     if (!canSearch) {
-      setError("구, 동 또는 상세 검색어 중 하나 이상을 입력해주세요.");
+      setError("구, 동, 세부 주소 또는 건물명·동명 중 하나 이상을 입력해주세요.");
       setItems([]);
       setTotal(0);
       setHasNext(false);
@@ -86,6 +92,7 @@ export default function SearchPage() {
         district,
         dong,
         query,
+        building_keyword: buildingKeyword,
         page: nextPage,
         limit: LIMIT,
       });
@@ -140,7 +147,7 @@ export default function SearchPage() {
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 lg:grid-cols-[0.8fr_1fr_1fr_1.4fr_auto] lg:items-end">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[0.75fr_1fr_1fr_1.35fr_1.35fr_auto] xl:items-end">
               <div className="flex min-h-[112px] flex-col">
                 <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">시도</label>
                 <div className="mt-2 flex h-14 items-center rounded-2xl bg-emerald-50 px-4 text-sm font-black text-emerald-700 ring-1 ring-emerald-100">
@@ -195,7 +202,7 @@ export default function SearchPage() {
 
               <div className="flex min-h-[112px] flex-col">
                 <label htmlFor="query" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                  상세 검색어
+                  세부 주소
                 </label>
                 <input
                   id="query"
@@ -210,10 +217,27 @@ export default function SearchPage() {
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
+              <div className="flex min-h-[112px] flex-col">
+                <label htmlFor="buildingKeyword" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  건물명·동명
+                </label>
+                <input
+                  id="buildingKeyword"
+                  value={buildingKeyword}
+                  onChange={(event) => {
+                    setBuildingKeyword(event.target.value);
+                    setSelectedBuilding(null);
+                  }}
+                  placeholder="예: 101동, 141동, 경비실20, 상가동"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+                <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
+              </div>
+
               <button
                 type="submit"
                 disabled={loading || !canSearch}
-                className="mb-7 h-14 rounded-2xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-14 rounded-2xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2 xl:col-span-1 xl:mb-7"
               >
                 {loading ? "검색 중..." : "주소 검색"}
               </button>
@@ -261,7 +285,7 @@ export default function SearchPage() {
                   ? "mt-2 text-sm font-semibold leading-6 text-white/90"
                   : "mt-2 text-sm font-semibold leading-6 text-slate-600";
                 const identity = buildingIdentity(building);
-                const scale = buildingScale(building);
+                const scaleParts = buildingScaleParts(building);
 
                 return (
                   <button
@@ -278,7 +302,7 @@ export default function SearchPage() {
                       <div>
                         <div className={labelClass}>도로명주소</div>
                         <h3 className={addressClass}>
-                          {building.road_address || building.display_address}
+                          {building.display_address || building.road_address}
                         </h3>
                         {identity && (
                           <p className={selected ? "mt-2 text-sm font-black text-emerald-50" : "mt-2 text-sm font-black text-slate-700"}>
@@ -289,18 +313,13 @@ export default function SearchPage() {
                         <p className={subAddressClass}>
                           {building.plat_plc || "지번 주소 정보 없음"}
                         </p>
-                        {scale && (
-                          <p className={selected ? "mt-3 text-xs font-bold text-white/80" : "mt-3 text-xs font-bold text-slate-500"}>
-                            {scale}
-                          </p>
-                        )}
                       </div>
-                      <div className="flex flex-wrap gap-2 md:justify-end">
-                        {[building.sgg_cd_nm, building.bjd_cd_nm].filter(Boolean).map((item) => (
+                      <div className="flex flex-wrap gap-2 md:max-w-[180px] md:justify-end">
+                        {scaleParts.map((item) => (
                           <span
                             key={item}
-                            className={`rounded-full px-3 py-1 text-xs font-black ${
-                              selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                            className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                              selected ? "bg-white/20 text-white ring-1 ring-white/25" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
                             }`}
                           >
                             {item}
@@ -317,7 +336,7 @@ export default function SearchPage() {
               <div className="rounded-3xl border border-dashed border-emerald-200 bg-emerald-50 p-8 text-center">
                 <h3 className="text-lg font-black text-slate-950">검색 결과가 없습니다.</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  구와 동을 조금 넓히거나 상세 검색어를 줄여 다시 검색해 주세요.
+                  구와 동을 조금 넓히거나 세부 주소를 줄여 다시 검색해 주세요.
                 </p>
               </div>
             )}
@@ -364,17 +383,14 @@ export default function SearchPage() {
                     {selectedBuilding.plat_plc}
                   </p>
                   {buildingScale(selectedBuilding) && (
-                    <p className="mt-3 text-xs font-bold text-slate-500">
-                      {buildingScale(selectedBuilding)}
-                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {buildingScaleParts(selectedBuilding).map((item) => (
+                        <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {[selectedBuilding.sgg_cd_nm, selectedBuilding.bjd_cd_nm].filter(Boolean).map((item) => (
-                      <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               ) : (
                 <p className="mt-5 text-sm leading-6 text-slate-500">

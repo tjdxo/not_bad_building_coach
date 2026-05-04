@@ -20,13 +20,39 @@ import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 
 type ChartPoint = {
   month: string;
+  tooltipMonth: string;
   value: number;
   avg: number;
 };
 
+function formatMonthShort(value?: string | null, year?: number, month?: number) {
+  const raw = value || "";
+  const match = raw.match(/^(\d{4})[-.](\d{1,2})/);
+  if (match) {
+    return `${match[1].slice(2)}.${match[2].padStart(2, "0")}`;
+  }
+  if (year && month) {
+    return `${String(year).slice(2)}.${String(month).padStart(2, "0")}`;
+  }
+  return raw;
+}
+
+function formatMonthTooltip(value?: string | null, year?: number, month?: number) {
+  const raw = value || "";
+  const match = raw.match(/^(\d{4})[-.](\d{1,2})/);
+  if (match) {
+    return `${match[1]}.${match[2].padStart(2, "0")}`;
+  }
+  if (year && month) {
+    return `${year}.${String(month).padStart(2, "0")}`;
+  }
+  return raw;
+}
+
 function buildChartData(report: ReportApiResponse, source: "electricity" | "gas") {
   return getMonthlyEnergy(report).map((item) => ({
-    month: item.label || `${item.month}월`,
+    month: formatMonthShort(item.use_ym || item.label, item.year, item.month),
+    tooltipMonth: formatMonthTooltip(item.use_ym || item.label, item.year, item.month),
     value: source === "electricity" ? item.target_electricity_kwh : item.target_gas_m3,
     avg: source === "electricity" ? item.peer_avg_electricity_kwh : item.peer_avg_gas_m3,
   }));
@@ -68,12 +94,23 @@ function BarChart({
   data,
   colorClass,
   unit,
+  emptyMessage,
 }: {
   data: ChartPoint[];
   colorClass: string;
   unit: string;
+  emptyMessage?: string;
 }) {
   const maxValue = Math.max(1, ...data.map((item) => Math.max(item.value, item.avg)));
+  const hasData = data.some((item) => item.value > 0 || item.avg > 0);
+
+  if (!hasData && emptyMessage) {
+    return (
+      <div className="mt-8 flex h-48 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center text-sm font-bold leading-6 text-slate-500">
+        {emptyMessage}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-8">
@@ -81,8 +118,25 @@ function BarChart({
         {data.map((item) => (
           <div key={item.month} className="flex flex-1 flex-col items-center gap-2">
             <div className="flex w-full items-end justify-center gap-1">
-              <div className="w-2 rounded-t bg-slate-200" style={{ height: `${(item.avg / maxValue) * 160}px` }} />
-              <div className={`w-3 rounded-t ${colorClass}`} style={{ height: `${(item.value / maxValue) * 160}px` }} />
+              <div
+                className="w-2 rounded-t bg-slate-200"
+                style={{ height: `${(item.avg / maxValue) * 160}px` }}
+                title={`${item.tooltipMonth}\n유사 건물 평균: ${formatNumber(item.avg, 1)} ${unit}`}
+              />
+              <div className="group relative flex items-end justify-center">
+                <div
+                  className={`w-3 rounded-t ${colorClass}`}
+                  style={{ height: `${(item.value / maxValue) * 160}px` }}
+                  title={`${item.tooltipMonth}\n대상 건물: ${formatNumber(item.value, 1)} ${unit}${
+                    item.avg > 0 ? `\n유사 건물 평균: ${formatNumber(item.avg, 1)} ${unit}` : ""
+                  }`}
+                />
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 hidden w-44 -translate-x-1/2 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-xl group-hover:block">
+                  <div className="font-black">{item.tooltipMonth}</div>
+                  <div>대상 건물: {formatNumber(item.value, 1)} {unit}</div>
+                  {item.avg > 0 && <div>유사 건물 평균: {formatNumber(item.avg, 1)} {unit}</div>}
+                </div>
+              </div>
             </div>
             <span className="text-[10px] font-bold text-slate-400">{item.month}</span>
           </div>
@@ -296,6 +350,17 @@ export default async function DashboardPage({
   const gasData = buildChartData(report, "gas");
   const actions = buildActions(report);
   const carbonSaving = estimateCarbonSaving(report);
+  const summaryCards = [
+    { label: "효율 등급", value: report.analysis.grade },
+    { label: "전기", value: formatRatioGap(report.energy_summary.electricity_ratio) },
+    { label: "가스", value: formatRatioGap(report.energy_summary.gas_ratio) },
+    { label: "탄소 절감", value: `${formatNumber(carbonSaving, 1)}t` },
+    {
+      label: "유사군 순위",
+      value: report.peer_group?.label || "산정 예정",
+      desc: "유사 건물군 데이터 연결 후 표시됩니다.",
+    },
+  ];
 
   return (
     <main className="min-h-screen pb-16">
@@ -321,16 +386,14 @@ export default async function DashboardPage({
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                ["효율 등급", report.analysis.grade],
-                ["전기", formatRatioGap(report.energy_summary.electricity_ratio)],
-                ["가스", formatRatioGap(report.energy_summary.gas_ratio)],
-                ["탄소 절감", `${formatNumber(carbonSaving, 1)}t`],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-slate-50 p-4 text-center">
-                  <div className="text-xs font-black text-slate-400">{label}</div>
-                  <div className="mt-2 text-2xl font-black text-slate-950">{value}</div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+              {summaryCards.map((card) => (
+                <div key={card.label} className="rounded-2xl bg-slate-50 p-4 text-center">
+                  <div className="text-xs font-black text-slate-400">{card.label}</div>
+                  <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
+                  {card.desc && (
+                    <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -353,7 +416,12 @@ export default async function DashboardPage({
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 m³ 기준 비교</p>
-            <BarChart data={gasData} colorClass="bg-blue-500" unit="m³" />
+            <BarChart
+              data={gasData}
+              colorClass="bg-blue-500"
+              unit="m³"
+              emptyMessage="가스 사용량 데이터는 추후 연동 예정입니다."
+            />
           </div>
         </div>
 

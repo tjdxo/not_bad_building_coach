@@ -140,6 +140,7 @@ export default async function ReportPage({
     ["전기 격차", formatRatioGap(report.energy_summary.electricity_ratio)],
     ["가스 격차", formatRatioGap(report.energy_summary.gas_ratio)],
     ["탄소 절감 여지", `${formatNumber(carbonSaving, 1)}tCO₂e`],
+    ["유사군 순위", report.peer_group?.label || "산정 예정"],
   ];
 
   return (
@@ -204,7 +205,7 @@ export default async function ReportPage({
 
         <section className="mt-12 rounded-[2rem] bg-slate-950 p-8 text-white">
           <h2 className="text-center text-sm font-black tracking-[0.25em] text-slate-400">예상 효과</h2>
-          <div className="mt-8 grid gap-6 sm:grid-cols-4">
+          <div className="mt-8 grid gap-6 sm:grid-cols-5">
             {effects.map(([label, value]) => (
               <div key={label} className="text-center">
                 <div className="text-sm font-bold text-slate-400">{label}</div>

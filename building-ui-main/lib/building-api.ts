@@ -69,6 +69,11 @@ export type ReportApiResponse = {
   status?: "ok" | "energy_data_missing";
   message?: string | null;
   building: ApiBuilding;
+  peer_group?: {
+    rank?: number | null;
+    total?: number | null;
+    label?: string | null;
+  } | null;
   energy?: ReportEnergyInfo | null;
   energy_summary: {
     target_avg_electricity_kwh: number;
@@ -151,6 +156,7 @@ export type BuildingSearchParams = {
   district?: string;
   dong?: string;
   query?: string;
+  building_keyword?: string;
   page?: number;
   limit?: number;
 };
@@ -159,10 +165,11 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
   const district = paramsInput.district?.trim() || "";
   const dong = paramsInput.dong?.trim() || "";
   const query = paramsInput.query?.trim() || "";
+  const buildingKeyword = paramsInput.building_keyword?.trim() || "";
   const page = paramsInput.page || 1;
   const limit = paramsInput.limit || 20;
 
-  if (!district && !dong && !query) {
+  if (!district && !dong && !query && !buildingKeyword) {
     return {
       items: [],
       page,
@@ -181,6 +188,9 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
   }
   if (query) {
     params.set("query", query);
+  }
+  if (buildingKeyword) {
+    params.set("building_keyword", buildingKeyword);
   }
   params.set("page", String(page));
   params.set("limit", String(limit));

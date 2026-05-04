@@ -88,7 +88,7 @@ PowerShell 확인:
 Invoke-RestMethod "http://localhost:8080/api/db-health"
 Invoke-RestMethod "http://localhost:8080/api/districts"
 Invoke-RestMethod "http://localhost:8080/api/dongs?district=서울특별시 송파구"
-Invoke-RestMethod "http://localhost:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&page=1&limit=20"
+Invoke-RestMethod "http://localhost:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&building_keyword=141동&page=1&limit=20"
 ```
 
 ## 6. Supabase `building_master` 주소 검색
@@ -114,12 +114,12 @@ curl "http://127.0.0.1:8080/api/dongs?district=서울특별시 송파구"
 주소 검색 API:
 
 ```bash
-curl "http://127.0.0.1:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&page=1&limit=20"
+curl "http://127.0.0.1:8080/api/buildings?district=서울특별시 송파구&dong=거여동&query=362&building_keyword=141동&page=1&limit=20"
 ```
 
-`district`, `dong`, `query`는 선택값입니다. 단, 아무 조건도 없으면 60만 건 전체를 반환하지 않고 빈 결과를 반환합니다. `limit` 기본값은 20이고 최대 50입니다.
+`district`, `dong`, `query`, `building_keyword`는 선택값입니다. `building_keyword`는 `bld_nm`, `dong_nm`에서 검색합니다. 단, 아무 조건도 없으면 60만 건 전체를 반환하지 않고 빈 결과를 반환합니다. `limit` 기본값은 20이고 최대 50입니다.
 
-응답은 `items`, `page`, `limit`, `total`, `has_next`를 포함합니다. 각 item은 `building_id`, `plat_plc`, `road_address`, `sgg_cd_nm`, `bjd_cd_nm`, `display_address`만 반환합니다.
+응답은 `items`, `page`, `limit`, `total`, `has_next`를 포함합니다. 각 item은 `building_id`, `plat_plc`, `road_address`, `sgg_cd_nm`, `bjd_cd_nm`, `display_address`, `bld_nm`, `dong_nm`, `grs_ar`, `agnd_flr`를 반환합니다.
 
 `display_address`는 `road_address`가 있으면 도로명주소를 사용하고, 없으면 `plat_plc`를 사용합니다.
 
