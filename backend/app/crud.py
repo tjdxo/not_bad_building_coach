@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, inspect, or_, select, text
@@ -14,6 +15,30 @@ BUILDING_MASTER_ID_CANDIDATES = (
 )
 _building_master_id_column: Optional[str] = None
 _building_master_id_column_checked = False
+
+
+def _dedupe_strings(values: List[str]) -> List[str]:
+    seen = set()
+    result = []
+    for value in values:
+        normalized = value.strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def _expand_building_keyword_terms(keyword: str) -> List[str]:
+    compact_keyword = "".join(keyword.split())
+    terms = [keyword, compact_keyword]
+
+    if "에스케이" in compact_keyword:
+        terms.append(compact_keyword.replace("에스케이", "SK"))
+
+    if "sk" in compact_keyword.lower():
+        terms.append(re.sub("sk", "에스케이", compact_keyword, flags=re.IGNORECASE))
+
+    return _dedupe_strings(terms)
 
 
 def find_building_by_address(db: Session, address: str) -> Optional[Building]:
@@ -147,14 +172,21 @@ def search_building_master(
         params["normalized_search"] = f"%{''.join(keyword.split())}%"
         params["prefix"] = f"{keyword}%"
 
-    if building_keyword_value:
-        where_parts.append("""
-            (
-              COALESCE(bld_nm, '') ILIKE :building_search
-              OR COALESCE(dong_nm, '') ILIKE :building_search
-            )
-        """)
-        params["building_search"] = f"%{building_keyword_value}%"
+    building_terms = _expand_building_keyword_terms(building_keyword_value) if building_keyword_value else []
+    if building_terms:
+        building_term_parts = []
+        for index, term in enumerate(building_terms):
+            search_key = f"building_search_{index}"
+            no_space_key = f"building_search_no_space_{index}"
+            building_term_parts.append(f"""
+                COALESCE(bld_nm, '') ILIKE :{search_key}
+                OR COALESCE(dong_nm, '') ILIKE :{search_key}
+                OR REPLACE(COALESCE(bld_nm, ''), ' ', '') ILIKE :{no_space_key}
+                OR REPLACE(COALESCE(dong_nm, ''), ' ', '') ILIKE :{no_space_key}
+            """)
+            params[search_key] = f"%{term}%"
+            params[no_space_key] = f"%{''.join(term.split())}%"
+        where_parts.append("(" + " OR ".join(building_term_parts) + ")")
 
     where_clause = "WHERE " + " AND ".join(where_parts)
     order_clause = """
