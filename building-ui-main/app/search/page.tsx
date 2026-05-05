@@ -12,6 +12,13 @@ import { SEOUL_DISTRICTS, SEOUL_DONGS_BY_DISTRICT } from "@/lib/seoul-address";
 
 const LIMIT = 20;
 
+type SearchFilters = {
+  district: string;
+  dong: string;
+  query: string;
+  buildingKeyword: string;
+};
+
 function shortDistrictName(district: string) {
   return district.replace("서울특별시 ", "");
 }
@@ -77,8 +84,19 @@ export default function SearchPage() {
     setSelectedBuilding(null);
   }, [district]);
 
-  const runSearch = async (nextPage = 1) => {
-    if (!canSearch) {
+  const currentFilters = (): SearchFilters => ({
+    district,
+    dong,
+    query,
+    buildingKeyword,
+  });
+
+  const runSearch = async (nextPage = 1, filters = currentFilters()) => {
+    const hasSearchCondition = Boolean(
+      filters.district || filters.dong || filters.query.trim() || filters.buildingKeyword.trim(),
+    );
+
+    if (!hasSearchCondition) {
       setError("구, 동, 세부 주소 또는 건물명·동명 중 하나 이상을 입력해주세요.");
       setItems([]);
       setTotal(0);
@@ -94,10 +112,10 @@ export default function SearchPage() {
 
     try {
       const result = await searchBuildings({
-        district,
-        dong,
-        query,
-        building_keyword: buildingKeyword,
+        district: filters.district,
+        dong: filters.dong,
+        query: filters.query,
+        building_keyword: filters.buildingKeyword,
         page: nextPage,
         limit: LIMIT,
       });
@@ -117,7 +135,19 @@ export default function SearchPage() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void runSearch(1);
+    const formData = new FormData(event.currentTarget);
+    const nextFilters = {
+      district: String(formData.get("district") || ""),
+      dong: String(formData.get("dong") || ""),
+      query: String(formData.get("query") || ""),
+      buildingKeyword: String(formData.get("building_keyword") || ""),
+    };
+
+    setDistrict(nextFilters.district);
+    setDong(nextFilters.dong);
+    setQuery(nextFilters.query);
+    setBuildingKeyword(nextFilters.buildingKeyword);
+    void runSearch(1, nextFilters);
   };
 
   const handleStartReport = async () => {
@@ -167,6 +197,7 @@ export default function SearchPage() {
                 </label>
                 <select
                   id="district"
+                  name="district"
                   value={district}
                   onChange={(event) => setDistrict(event.target.value)}
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -187,6 +218,7 @@ export default function SearchPage() {
                 </label>
                 <select
                   id="dong"
+                  name="dong"
                   value={dong}
                   onChange={(event) => {
                     setDong(event.target.value);
@@ -211,6 +243,7 @@ export default function SearchPage() {
                 </label>
                 <input
                   id="query"
+                  name="query"
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
@@ -228,6 +261,7 @@ export default function SearchPage() {
                 </label>
                 <input
                   id="buildingKeyword"
+                  name="building_keyword"
                   value={buildingKeyword}
                   onChange={(event) => {
                     setBuildingKeyword(event.target.value);
