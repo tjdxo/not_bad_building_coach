@@ -308,6 +308,24 @@ export function formatBuildingType(type: string) {
   return labels[type] || type;
 }
 
+export function formatBuildingDescriptor(
+  building: Pick<ApiBuilding, "bld_nm" | "dong_nm" | "building_type">,
+) {
+  const nameParts = [building.bld_nm, building.dong_nm]
+    .map((item) => item?.trim())
+    .filter(Boolean);
+
+  if (nameParts.length > 0) {
+    return nameParts.join(" ");
+  }
+
+  if (building.building_type && building.building_type !== "building_master") {
+    return formatBuildingType(building.building_type);
+  }
+
+  return "";
+}
+
 export function formatArea(value: number) {
   return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}㎡`;
 }

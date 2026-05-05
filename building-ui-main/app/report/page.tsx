@@ -5,7 +5,7 @@ import {
   estimateCarbonSaving,
   fetchReport,
   formatArea,
-  formatBuildingType,
+  formatBuildingDescriptor,
   formatNumber,
   formatRatioGap,
   resolveAddressParam,
@@ -135,6 +135,14 @@ export default async function ReportPage({
   const analysisPoints = buildAnalysisPoints(report);
   const reportLines = splitReport(report.report_text);
   const carbonSaving = estimateCarbonSaving(report);
+  const buildingDescriptor = formatBuildingDescriptor(building);
+  const buildingCode = building.building_code?.startsWith("BUILDING-MASTER-") ? "" : building.building_code;
+  const buildingMeta = [
+    building.road_address || building.display_address,
+    buildingDescriptor,
+    formatArea(building.gross_floor_area),
+    building.approval_year > 0 ? `${building.approval_year}년` : "",
+  ].filter(Boolean);
   const effects = [
     ["효율 등급", report.analysis.grade],
     ["전기 격차", formatRatioGap(report.energy_summary.electricity_ratio)],
@@ -155,11 +163,11 @@ export default async function ReportPage({
               <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-950">에너지 진단 분석 리포트</h1>
               <div className="mt-5 flex flex-wrap gap-3 text-sm font-bold text-slate-500">
                 <span>{building.name}</span>
-                <span>{building.building_code}</span>
-                <span>{formatBuildingType(building.building_type)}</span>
+                {buildingCode && <span>{buildingCode}</span>}
+                {buildingDescriptor && <span>{buildingDescriptor}</span>}
               </div>
               <p className="mt-3 text-sm text-slate-500">
-                {building.road_address} · {formatArea(building.gross_floor_area)} · {building.approval_year}년
+                {buildingMeta.join(" · ")}
               </p>
             </div>
             <button

@@ -6,7 +6,7 @@ import {
   fetchReport,
   fetchReportForParams,
   formatArea,
-  formatBuildingType,
+  formatBuildingDescriptor,
   getMonthlyEnergy,
   formatNumber,
   formatRatioGap,
@@ -113,10 +113,10 @@ function BarChart({
   }
 
   return (
-    <div className="mt-8">
-      <div className="flex h-48 items-end gap-2">
+    <div className="mt-8 w-full min-w-0 overflow-x-hidden">
+      <div className="flex h-48 w-full min-w-0 items-end gap-1 sm:gap-2">
         {data.map((item) => (
-          <div key={item.month} className="flex flex-1 flex-col items-center gap-2">
+          <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
             <div className="flex w-full items-end justify-center gap-1">
               <div
                 className="w-2 rounded-t bg-slate-200"
@@ -350,6 +350,12 @@ export default async function DashboardPage({
   const gasData = buildChartData(report, "gas");
   const actions = buildActions(report);
   const carbonSaving = estimateCarbonSaving(report);
+  const buildingDescriptor = formatBuildingDescriptor(building);
+  const buildingMeta = [
+    building.road_address || building.display_address,
+    buildingDescriptor,
+    formatArea(building.gross_floor_area),
+  ].filter(Boolean);
   const summaryCards = [
     { label: "효율 등급", value: report.analysis.grade },
     { label: "전기", value: formatRatioGap(report.energy_summary.electricity_ratio) },
@@ -371,7 +377,7 @@ export default async function DashboardPage({
               <p className="text-sm font-black tracking-[0.25em] text-emerald-600">진단 대시보드</p>
               <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
               <p className="mt-3 text-slate-600">
-                {building.road_address} · {formatBuildingType(building.building_type)} · {formatArea(building.gross_floor_area)}
+                {buildingMeta.join(" · ")}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {report.energy?.source === "db" && (
@@ -402,8 +408,8 @@ export default async function DashboardPage({
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-8 lg:grid-cols-2">
-          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="grid grid-cols-1 gap-8">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 kWh 기준 비교</p>
             {report.energy?.is_estimated_included && (
@@ -413,7 +419,7 @@ export default async function DashboardPage({
             )}
             <BarChart data={electricityData} colorClass="bg-emerald-500" unit="kWh" />
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 m³ 기준 비교</p>
             <BarChart

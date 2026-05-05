@@ -139,18 +139,19 @@ def search_building_master(
             (
               plat_plc ILIKE :search
               OR road_address ILIKE :search
-              OR sgg_cd_nm ILIKE :search
-              OR bjd_cd_nm ILIKE :search
+              OR REPLACE(plat_plc, ' ', '') ILIKE :normalized_search
+              OR REPLACE(road_address, ' ', '') ILIKE :normalized_search
             )
         """)
         params["search"] = f"%{keyword}%"
+        params["normalized_search"] = f"%{''.join(keyword.split())}%"
         params["prefix"] = f"{keyword}%"
 
     if building_keyword_value:
         where_parts.append("""
             (
-              bld_nm ILIKE :building_search
-              OR dong_nm ILIKE :building_search
+              COALESCE(bld_nm, '') ILIKE :building_search
+              OR COALESCE(dong_nm, '') ILIKE :building_search
             )
         """)
         params["building_search"] = f"%{building_keyword_value}%"

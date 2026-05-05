@@ -62,6 +62,11 @@ export default function SearchPage() {
   }, [district]);
   const canSearch = Boolean(district || dong || query.trim() || buildingKeyword.trim());
 
+  const resetSearchPage = () => {
+    setPage(1);
+    setSelectedBuilding(null);
+  };
+
   useEffect(() => {
     setDong("");
     setItems([]);
@@ -185,7 +190,7 @@ export default function SearchPage() {
                   value={dong}
                   onChange={(event) => {
                     setDong(event.target.value);
-                    setSelectedBuilding(null);
+                    resetSearchPage();
                   }}
                   disabled={!district}
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
@@ -209,7 +214,7 @@ export default function SearchPage() {
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
-                    setSelectedBuilding(null);
+                    resetSearchPage();
                   }}
                   placeholder="예: 성내천로, 거여동 362, 33다길 2"
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -226,7 +231,7 @@ export default function SearchPage() {
                   value={buildingKeyword}
                   onChange={(event) => {
                     setBuildingKeyword(event.target.value);
-                    setSelectedBuilding(null);
+                    resetSearchPage();
                   }}
                   placeholder="예: 101동, 141동, 경비실20, 상가동"
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"

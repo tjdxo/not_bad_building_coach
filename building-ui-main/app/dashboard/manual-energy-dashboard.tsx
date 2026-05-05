@@ -57,12 +57,12 @@ function MiniBarChart({
   const maxValue = Math.max(1, ...values);
 
   return (
-    <div className="mt-8">
-      <div className="flex h-48 items-end gap-2">
+    <div className="mt-8 w-full min-w-0 overflow-x-hidden">
+      <div className="flex h-48 w-full min-w-0 items-end gap-1 sm:gap-2">
         {rows.map((row, index) => {
           const value = values[index] || 0;
           return (
-            <div key={`${source}-${row.month}`} className="flex flex-1 flex-col items-center gap-2">
+            <div key={`${source}-${row.month}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
               <div
                 className={`w-4 rounded-t ${colorClass}`}
                 style={{ height: `${(value / maxValue) * 160}px` }}
@@ -189,13 +189,13 @@ export function ManualEnergyDashboard({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
-          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="mt-8 grid grid-cols-1 gap-8">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">사용자가 입력한 kWh 기준</p>
             <MiniBarChart rows={rows} source="electricity" colorClass="bg-emerald-500" unit="kWh" />
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">사용자가 입력한 값 기준</p>
             <MiniBarChart rows={rows} source="gas" colorClass="bg-blue-500" unit="" />
