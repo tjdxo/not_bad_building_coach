@@ -555,6 +555,7 @@ function AiEstimatedDashboard({
   const electric = aiDiagnosis?.electric;
   const gas = aiDiagnosis?.gas;
   const needsUserInput = Boolean(aiDiagnosis?.needs_user_input);
+  const absoluteGrade = absoluteGradeSummary(report.peer_benchmark);
   const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
     address: building.display_address || building.road_address || address,
     building_id: String(building.building_id ?? building.id ?? ""),
@@ -576,25 +577,20 @@ function AiEstimatedDashboard({
               <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
               <p className="mt-3 text-slate-600">{buildingMeta.join(" · ")}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {["AI 추정 기반", "참고용 진단", needsUserInput ? "데이터 확인 필요" : "추정 결과 확인"].map((badge) => (
+                {[`절대 등급 ${absoluteGrade.value}`, "AI 추정 기반", "참고용 진단", needsUserInput ? "데이터 확인 필요" : "추정 결과 확인"].map((badge) => (
                   <span key={badge} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
                     {badge}
                   </span>
                 ))}
               </div>
             </div>
-            <Link
-              href={manualEnergyHref}
-              className="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white"
-            >
-              실제 사용량 입력하기
-            </Link>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
           <AiSummaryCard label="진단 방식" value="AI 추정 기반" desc="실측 사용량 부족 시 참고용으로 표시" />
           <AiSummaryCard label="전기 추정 사용량" value={formatOptionalNumber(aiMainValue(electric), "kWh")} desc="display_main 우선" />
           <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} desc="display_main 우선" />
@@ -602,20 +598,18 @@ function AiEstimatedDashboard({
           <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
         </div>
 
-        {needsUserInput && (
-          <section className="mt-8 rounded-3xl border border-amber-100 bg-amber-50 p-6">
-            <h2 className="text-lg font-black text-slate-950">정확한 진단을 위해 실제 사용량 입력을 권장합니다.</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
-              AI 추정값과 유사건물 기준값 차이가 크거나 신뢰도가 낮은 경우, 전기·가스 고지서 기반 사용량을 입력하면 더 현실적인 진단 흐름으로 이어갈 수 있습니다.
-            </p>
-            <Link
-              href={manualEnergyHref}
-              className="mt-5 inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white"
-            >
-              고지서 기반으로 다시 진단하기
-            </Link>
-          </section>
-        )}
+        <section className="mt-8 rounded-3xl border border-amber-100 bg-amber-50 p-6">
+          <h2 className="text-lg font-black text-slate-950">정확한 진단을 위해 실제 사용량 입력을 권장합니다.</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
+            AI 추정값과 유사건물 기준값 차이가 크거나 신뢰도가 낮은 경우, 전기·가스 고지서 기반 사용량을 입력하면 더 현실적인 진단 흐름으로 이어갈 수 있습니다.
+          </p>
+          <Link
+            href={manualEnergyHref}
+            className="mt-5 inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white"
+          >
+            실제 사용량 입력하기
+          </Link>
+        </section>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-2">
           <AiEnergyCard title="전기 AI 진단" diagnosis={electric} missingMessage="전기 추정 결과가 아직 없습니다." />

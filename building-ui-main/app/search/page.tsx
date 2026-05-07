@@ -101,6 +101,7 @@ export default function SearchPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [estimatedChoiceReady, setEstimatedChoiceReady] = useState(false);
   const [searched, setSearched] = useState(false);
   const searchControllerRef = useRef<AbortController | null>(null);
   const latestRequestIdRef = useRef(0);
@@ -118,6 +119,7 @@ export default function SearchPage() {
   const resetSearchPage = () => {
     setPage(1);
     setSelectedBuilding(null);
+    setEstimatedChoiceReady(false);
   };
 
   useEffect(() => {
@@ -129,6 +131,7 @@ export default function SearchPage() {
     setSearched(false);
     setPage(1);
     setSelectedBuilding(null);
+    setEstimatedChoiceReady(false);
     setLoading(false);
     setError("");
     setStatusMessage("");
@@ -178,6 +181,7 @@ export default function SearchPage() {
     setError("");
     setStatusMessage("");
     setSelectedBuilding(null);
+    setEstimatedChoiceReady(false);
     setSearched(true);
 
     try {
@@ -253,7 +257,12 @@ export default function SearchPage() {
     setError("");
 
     try {
-      await createReportForBuilding(selectedBuilding);
+      const report = await createReportForBuilding(selectedBuilding);
+      if (report.report_mode === "estimated") {
+        setEstimatedChoiceReady(true);
+        setStatusMessage("실측 사용량이 없어 AI 추정 진단을 준비했습니다. 진행 방식을 선택해 주세요.");
+        return;
+      }
       router.push(dashboardHrefForBuilding(selectedBuilding));
     } catch (err: unknown) {
       console.error(err);
@@ -262,6 +271,13 @@ export default function SearchPage() {
       setReportLoading(false);
     }
   };
+
+  const selectedManualEnergyHref = selectedBuilding
+    ? `/search/manual-energy?${new URLSearchParams({
+        address: selectedBuilding.display_address || selectedBuilding.road_address || selectedBuilding.plat_plc || "",
+        building_id: String(selectedBuilding.building_id ?? ""),
+      }).toString()}`
+    : "";
 
   return (
     <main className={`min-h-screen bg-slate-50 py-12 ${selectedBuilding ? "pb-32 lg:pb-12" : ""}`}>
@@ -432,7 +448,11 @@ export default function SearchPage() {
                   <button
                     key={`${building.building_id ?? building.display_address}-${building.plat_plc ?? ""}`}
                     type="button"
-                    onClick={() => setSelectedBuilding(building)}
+                    onClick={() => {
+                      setSelectedBuilding(building);
+                      setEstimatedChoiceReady(false);
+                      setStatusMessage("");
+                    }}
                     className={`block w-full rounded-3xl border p-6 text-left transition ${
                       selected
                         ? "border-emerald-600 bg-emerald-600 text-white shadow-xl shadow-emerald-600/20"
@@ -547,6 +567,33 @@ export default function SearchPage() {
               >
                 {reportLoading ? "진단 요청 중..." : "선택한 건물로 진단 시작"}
               </button>
+              {selectedBuilding && estimatedChoiceReady && (
+                <div className="mt-5 rounded-2xl bg-amber-50 p-4">
+                  <h3 className="text-sm font-black text-slate-950">실측 사용량이 없는 건물입니다.</h3>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-amber-800">
+                    정확한 진단을 위해 실제 고지서 기반 사용량 입력을 권장합니다. AI 추정값은 참고용으로 확인할 수 있습니다.
+                  </p>
+                  <div className="mt-4 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => router.push(selectedManualEnergyHref)}
+                      className="h-11 rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white"
+                    >
+                      실제 사용량 입력하기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(dashboardHrefForBuilding(selectedBuilding))}
+                      className="h-11 rounded-2xl border border-amber-200 bg-white px-4 text-sm font-black text-slate-700"
+                    >
+                      AI 기반 추정치 확인
+                    </button>
+                    <p className="text-[11px] font-semibold leading-4 text-amber-700">
+                      AI 추정 진단은 실제 사용량과 다를 수 있어 참고용으로만 활용해 주세요.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </aside>
         </section>
@@ -569,15 +616,39 @@ export default function SearchPage() {
                 {selectedBuilding.plat_plc}
               </p>
             </div>
-            <button
-              type="button"
-              disabled={reportLoading}
-              onClick={() => void handleStartReport()}
-              className="shrink-0 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {reportLoading ? "요청 중" : "진단 시작"}
-            </button>
+            {estimatedChoiceReady ? (
+              <div className="flex shrink-0 flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => router.push(selectedManualEnergyHref)}
+                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white"
+                >
+                  실제 입력
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(dashboardHrefForBuilding(selectedBuilding))}
+                  className="rounded-2xl border border-amber-200 bg-white px-4 py-2 text-xs font-black text-slate-700"
+                >
+                  AI 추정
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={reportLoading}
+                onClick={() => void handleStartReport()}
+                className="shrink-0 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reportLoading ? "요청 중" : "진단 시작"}
+              </button>
+            )}
           </div>
+          {estimatedChoiceReady && (
+            <p className="mx-auto mt-2 max-w-6xl px-1 text-[11px] font-semibold leading-4 text-amber-700">
+              AI 추정 진단은 실제 사용량과 다를 수 있어 참고용으로만 활용해 주세요.
+            </p>
+          )}
         </div>
       )}
     </main>
