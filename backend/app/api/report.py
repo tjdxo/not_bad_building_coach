@@ -68,6 +68,18 @@ def _coerce_float_or_none(value: Any) -> Optional[float]:
     return result
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    return _coerce_float_or_none(value)
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    return _coerce_int_or_none(value)
+
+
+def _safe_bool(value: Any) -> bool:
+    return _coerce_bool(value)
+
+
 def _average_present(values: List[Optional[float]]) -> float:
     present_values = [value for value in values if value is not None]
     return round(sum(present_values) / len(present_values), 2) if present_values else 0
@@ -293,6 +305,94 @@ def _build_energy_usage_report_text(
     )
 
 
+def normalize_service_lite_row(row: Optional[Dict[str, Any]], prefix: str) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+
+    backend_has_result = _safe_bool(row.get(f"{prefix}_backend_has_result"))
+    if not backend_has_result:
+        return None
+
+    return {
+        "data_source_type": _safe_string(row.get(f"{prefix}_data_source_type")),
+        "diagnosis_label": _safe_string(row.get(f"{prefix}_diagnosis_label")),
+        "confidence_label": _safe_string(row.get(f"{prefix}_confidence_label")),
+        "front_badge": _safe_string(row.get(f"{prefix}_front_badge")),
+        "actual_kwh": _safe_float(row.get(f"{prefix}_actual_kwh")),
+        "ai_pred_kwh": _safe_float(row.get(f"{prefix}_ai_pred_kwh")),
+        "baseline_kwh": _safe_float(row.get(f"{prefix}_baseline_kwh")),
+        "service_reference_kwh": _safe_float(row.get(f"{prefix}_service_reference_kwh")),
+        "display_main_kwh": _safe_float(row.get(f"{prefix}_display_main_kwh")),
+        "compare_pct": _safe_float(row.get(f"{prefix}_compare_pct")),
+        "compare_basis": _safe_string(row.get(f"{prefix}_compare_basis")),
+        "percentile": _safe_float(row.get(f"{prefix}_percentile")),
+        "vs_peer_median_pct": _safe_float(row.get(f"{prefix}_vs_peer_median_pct")),
+        "service_strategy": _safe_string(row.get(f"{prefix}_service_strategy")),
+        "quality_flag": _safe_string(row.get(f"{prefix}_quality_flag")),
+        "quality_reason": _safe_string(row.get(f"{prefix}_quality_reason")),
+        "backend_has_result": backend_has_result,
+        "backend_is_measured": _safe_bool(row.get(f"{prefix}_backend_is_measured")),
+        "backend_is_estimated": _safe_bool(row.get(f"{prefix}_backend_is_estimated")),
+        "backend_needs_user_input": _safe_bool(row.get(f"{prefix}_backend_needs_user_input")),
+        "actual_per_area_year": _safe_float(row.get(f"{prefix}_actual_per_area_year")),
+        "estimated_per_area_year": _safe_float(row.get(f"{prefix}_estimated_per_area_year")),
+        "peer_reliability_score": _safe_float(row.get("peer_reliability_score")),
+        "peer_reliability_label": _safe_string(row.get("peer_reliability_label")),
+        "summary": _safe_string(row.get("summary_for_front")),
+        "recommendation": _safe_string(row.get("recommendation_for_front")),
+    }
+
+
+def build_ai_diagnosis(
+    electric_row: Optional[Dict[str, Any]],
+    gas_row: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    electric = normalize_service_lite_row(electric_row, "electric")
+    gas = normalize_service_lite_row(gas_row, "gas")
+    has_electric = electric is not None
+    has_gas = gas is not None
+    needs_user_input = bool(
+        (electric and electric.get("backend_needs_user_input"))
+        or (gas and gas.get("backend_needs_user_input"))
+    )
+    return {
+        "has_data": has_electric or has_gas,
+        "mode": "estimated" if has_electric or has_gas else "none",
+        "has_electric": has_electric,
+        "has_gas": has_gas,
+        "needs_user_input": needs_user_input,
+        "electric": electric,
+        "gas": gas,
+    }
+
+
+def _ai_display_value(diagnosis: Optional[Dict[str, Any]]) -> float:
+    if not diagnosis:
+        return 0
+    for key in ("display_main_kwh", "service_reference_kwh", "ai_pred_kwh", "baseline_kwh", "actual_kwh"):
+        value = diagnosis.get(key)
+        if value is not None:
+            return float(value)
+    return 0
+
+
+def _build_estimated_report_text(building_name: str, ai_diagnosis: Dict[str, Any]) -> str:
+    parts = []
+    electric = ai_diagnosis.get("electric")
+    gas = ai_diagnosis.get("gas")
+    if electric:
+        parts.append(f"전기: {electric.get('diagnosis_label') or '참고용 진단'} / 신뢰도 {electric.get('confidence_label') or '산정 불가'}")
+    if gas:
+        parts.append(f"가스: {gas.get('diagnosis_label') or '참고용 진단'} / 신뢰도 {gas.get('confidence_label') or '산정 불가'}")
+    summary = ", ".join(parts) if parts else "AI 추정 결과 없음"
+    return (
+        f"1. 한줄 진단: {building_name}은 실측 에너지 사용량이 부족해 AI 추정 기반 참고용 진단을 표시합니다.\n"
+        f"2. 왜 이렇게 분석되었는지: {summary}. AI 예측값, 유사건물 baseline, 서비스 기준값을 함께 검토했습니다.\n"
+        "3. 우선 실행 액션 3가지: 실제 고지서 확인, 전기·가스 사용량 직접 입력, 신뢰도 낮은 항목 우선 보정.\n"
+        "4. 주의사항: 본 결과는 서울시 공식 등급이나 법적 효력을 갖는 인증 결과가 아닌 참고용 분석입니다."
+    )
+
+
 def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> Dict[str, Any]:
     display_address = item.get("display_address") or item.get("road_address") or item.get("plat_plc") or fallback_address
     building_id = _coerce_int(item.get("building_id"))
@@ -365,6 +465,7 @@ def build_master_fallback_report(request: schemas.ReportRequest) -> schemas.Repo
     }
 
     return schemas.ReportResponse(
+        report_mode="no_data",
         building=raw_analysis_json["building"],
         energy_summary=raw_analysis_json["energy_summary"],
         analysis=raw_analysis_json["analysis"],
@@ -400,13 +501,68 @@ def build_energy_usage_report(
     building_item: Dict[str, Any],
     usage_rows: List[Dict[str, Any]],
     peer_benchmark_row: Optional[Dict[str, Any]] = None,
+    electric_ai_row: Optional[Dict[str, Any]] = None,
+    gas_ai_row: Optional[Dict[str, Any]] = None,
 ) -> schemas.ReportResponse:
     building = _master_building_info(building_item, fallback_address=request.address)
     peer_benchmark = _build_peer_benchmark_response(peer_benchmark_row)
+    ai_diagnosis = build_ai_diagnosis(electric_ai_row, gas_ai_row)
 
     if not usage_rows:
+        if ai_diagnosis.get("has_data"):
+            electric_value = _ai_display_value(ai_diagnosis.get("electric"))
+            gas_value = _ai_display_value(ai_diagnosis.get("gas"))
+            energy_summary = {
+                "target_avg_electricity_kwh": electric_value,
+                "target_avg_gas_m3": gas_value,
+                "peer_avg_electricity_kwh": _safe_float((ai_diagnosis.get("electric") or {}).get("baseline_kwh")) or electric_value,
+                "peer_avg_gas_m3": _safe_float((ai_diagnosis.get("gas") or {}).get("baseline_kwh")) or gas_value,
+                "electricity_ratio": 1,
+                "gas_ratio": 1,
+            }
+            raw_analysis_json = {
+                "building": building,
+                "energy_source": "ai_estimated",
+                "peer_benchmark": peer_benchmark,
+                "ai_diagnosis": ai_diagnosis,
+            }
+            return schemas.ReportResponse(
+                report_mode="estimated",
+                message="실측 에너지 사용량이 없어 AI 추정 기반 참고용 진단을 표시합니다.",
+                building=building,
+                peer_group={
+                    "rank": peer_benchmark.get("peer_total_rank"),
+                    "total": peer_benchmark.get("peer_count"),
+                    "label": peer_benchmark.get("peer_rank_label"),
+                } if peer_benchmark.get("has_data") else None,
+                energy_summary=energy_summary,
+                analysis={
+                    "peer_count": peer_benchmark.get("peer_count") or 0,
+                    "energy_waste_index": 100,
+                    "grade": "AI 추정 참고",
+                    "interpretation": "실측 데이터가 부족해 AI 예측값, 유사건물 baseline, 서비스 기준값을 함께 보여주는 참고용 진단입니다.",
+                },
+                monthly_energy=[],
+                report_text=_build_estimated_report_text(building["name"], ai_diagnosis),
+                raw_analysis_json=raw_analysis_json,
+                energy={
+                    "source": "ai_placeholder",
+                    "has_data": False,
+                    "months_count": 0,
+                    "period_start": None,
+                    "period_end": None,
+                    "is_estimated_included": True,
+                    "is_estimated_gas_included": True,
+                    "electricity_monthly": [],
+                    "gas_monthly": [],
+                },
+                peer_benchmark=peer_benchmark,
+                ai_diagnosis=ai_diagnosis,
+            )
+
         return schemas.ReportResponse(
             status="energy_data_missing",
+            report_mode="no_data",
             message="선택한 건물의 공공 에너지 사용량 데이터가 없습니다.",
             building=building,
             energy_summary={
@@ -442,6 +598,7 @@ def build_energy_usage_report(
                 "gas_monthly": [],
             },
             peer_benchmark=peer_benchmark,
+            ai_diagnosis=ai_diagnosis,
         )
 
     monthly_energy = []
@@ -530,8 +687,13 @@ def build_energy_usage_report(
         "is_estimated_included": estimated_included,
         "is_estimated_gas_included": estimated_gas_included,
         "peer_benchmark": peer_benchmark,
+        "ai_diagnosis": ai_diagnosis,
     }
+    measured_ai_diagnosis = ai_diagnosis.copy()
+    if measured_ai_diagnosis.get("has_data"):
+        measured_ai_diagnosis["mode"] = "mixed"
     return schemas.ReportResponse(
+        report_mode="mixed" if measured_ai_diagnosis.get("has_data") else "measured",
         building=building,
         peer_group={
             "rank": peer_benchmark.get("peer_total_rank"),
@@ -572,6 +734,7 @@ def build_energy_usage_report(
             "gas_monthly": gas_monthly,
         },
         peer_benchmark=peer_benchmark,
+        ai_diagnosis=measured_ai_diagnosis,
     )
 
 
@@ -633,7 +796,16 @@ def create_report(request: schemas.ReportRequest, db: Session = Depends(get_db))
             }
         usage_rows = crud.get_energy_usage_for_master_building(db, request.building_id)
         peer_benchmark_row = crud.get_peer_benchmark_for_master_building(db, request.building_id)
-        return build_energy_usage_report(request, building_item, usage_rows, peer_benchmark_row)
+        electric_ai_row = crud.get_electric_energy_service_lite_for_building(db, request.building_id)
+        gas_ai_row = crud.get_gas_energy_service_lite_for_building(db, request.building_id)
+        return build_energy_usage_report(
+            request,
+            building_item,
+            usage_rows,
+            peer_benchmark_row,
+            electric_ai_row,
+            gas_ai_row,
+        )
 
     if request.plat_plc or request.road_address:
         return build_master_fallback_report(request)

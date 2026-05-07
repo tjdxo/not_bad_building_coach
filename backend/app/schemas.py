@@ -114,8 +114,48 @@ class PeerGroupInfo(BaseModel):
     label: Optional[str] = None
 
 
+class EnergyAiLiteDiagnosis(BaseModel):
+    data_source_type: Optional[str] = None
+    diagnosis_label: Optional[str] = None
+    confidence_label: Optional[str] = None
+    front_badge: Optional[str] = None
+    actual_kwh: Optional[float] = None
+    ai_pred_kwh: Optional[float] = None
+    baseline_kwh: Optional[float] = None
+    service_reference_kwh: Optional[float] = None
+    display_main_kwh: Optional[float] = None
+    compare_pct: Optional[float] = None
+    compare_basis: Optional[str] = None
+    percentile: Optional[float] = None
+    vs_peer_median_pct: Optional[float] = None
+    service_strategy: Optional[str] = None
+    quality_flag: Optional[str] = None
+    quality_reason: Optional[str] = None
+    backend_has_result: bool = False
+    backend_is_measured: bool = False
+    backend_is_estimated: bool = False
+    backend_needs_user_input: bool = False
+    actual_per_area_year: Optional[float] = None
+    estimated_per_area_year: Optional[float] = None
+    peer_reliability_score: Optional[float] = None
+    peer_reliability_label: Optional[str] = None
+    summary: Optional[str] = None
+    recommendation: Optional[str] = None
+
+
+class AiDiagnosis(BaseModel):
+    has_data: bool = False
+    mode: str = "none"
+    has_electric: bool = False
+    has_gas: bool = False
+    needs_user_input: bool = False
+    electric: Optional[EnergyAiLiteDiagnosis] = None
+    gas: Optional[EnergyAiLiteDiagnosis] = None
+
+
 class ReportResponse(BaseModel):
     status: str = "ok"
+    report_mode: str = "measured"
     message: Optional[str] = None
     building: BuildingInfo
     peer_group: Optional[PeerGroupInfo] = None
@@ -126,3 +166,4 @@ class ReportResponse(BaseModel):
     raw_analysis_json: Dict[str, Any]
     energy: Optional[ReportEnergyInfo] = None
     peer_benchmark: Optional[Dict[str, Any]] = None
+    ai_diagnosis: Optional[AiDiagnosis] = None

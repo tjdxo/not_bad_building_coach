@@ -123,8 +123,48 @@ export type ReportEnergyInfo = {
   gas_monthly?: EnergyUsageMonthlyPoint[];
 };
 
+export type EnergyAiLiteDiagnosis = {
+  data_source_type?: string | null;
+  diagnosis_label?: string | null;
+  confidence_label?: string | null;
+  front_badge?: string | null;
+  actual_kwh?: number | null;
+  ai_pred_kwh?: number | null;
+  baseline_kwh?: number | null;
+  service_reference_kwh?: number | null;
+  display_main_kwh?: number | null;
+  compare_pct?: number | null;
+  compare_basis?: string | null;
+  percentile?: number | null;
+  vs_peer_median_pct?: number | null;
+  service_strategy?: string | null;
+  quality_flag?: string | null;
+  quality_reason?: string | null;
+  backend_has_result?: boolean;
+  backend_is_measured?: boolean;
+  backend_is_estimated?: boolean;
+  backend_needs_user_input?: boolean;
+  actual_per_area_year?: number | null;
+  estimated_per_area_year?: number | null;
+  peer_reliability_score?: number | null;
+  peer_reliability_label?: string | null;
+  summary?: string | null;
+  recommendation?: string | null;
+};
+
+export type AiDiagnosis = {
+  has_data: boolean;
+  mode: "estimated" | "mixed" | "none";
+  has_electric: boolean;
+  has_gas: boolean;
+  needs_user_input: boolean;
+  electric?: EnergyAiLiteDiagnosis | null;
+  gas?: EnergyAiLiteDiagnosis | null;
+};
+
 export type ReportApiResponse = {
   status?: "ok" | "energy_data_missing";
+  report_mode?: "measured" | "estimated" | "mixed" | "no_data";
   message?: string | null;
   building: ApiBuilding;
   peer_group?: {
@@ -151,6 +191,7 @@ export type ReportApiResponse = {
   monthly_energy?: MonthlyEnergyPoint[];
   report_text: string;
   raw_analysis_json: Record<string, unknown>;
+  ai_diagnosis?: AiDiagnosis | null;
 };
 
 export const API_BASE_URL =

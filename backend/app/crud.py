@@ -324,6 +324,28 @@ def get_peer_benchmark_for_master_building(db: Session, building_id: Any) -> Opt
     return dict(row) if row else None
 
 
+def get_electric_energy_service_lite_for_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
+    statement = text("""
+        SELECT *
+        FROM electric_energy_service_lite
+        WHERE building_id = :building_id
+        LIMIT 1
+    """)
+    row = db.execute(statement, {"building_id": building_id}).mappings().first()
+    return dict(row) if row else None
+
+
+def get_gas_energy_service_lite_for_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
+    statement = text("""
+        SELECT *
+        FROM gas_energy_service_lite
+        WHERE building_id = :building_id
+        LIMIT 1
+    """)
+    row = db.execute(statement, {"building_id": building_id}).mappings().first()
+    return dict(row) if row else None
+
+
 def get_energy_records_for_building(db: Session, building_id: int) -> List[BuildingEnergyMonthly]:
     statement = (
         select(BuildingEnergyMonthly)

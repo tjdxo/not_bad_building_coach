@@ -13,6 +13,7 @@ import {
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
+  type EnergyAiLiteDiagnosis,
   type EnergyUsageMonthlyPoint,
   type PeerBenchmark,
   type PeerMetric,
@@ -138,6 +139,13 @@ function formatChartValue(value: number | null, unit: string) {
   }
 
   return `${formatNumber(value, 1)} ${unit}`;
+}
+
+function formatOptionalNumber(value?: number | null, unit = "") {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "산정 불가";
+  }
+  return `${formatNumber(value, 1)}${unit ? ` ${unit}` : ""}`;
 }
 
 function BarChart({
@@ -413,14 +421,223 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     title: "분석 기준 안내",
     value: "참고용",
     lines: [
-      "절대 등급: 건물 에너지 원단위와 공공 에너지 효율 관련 기준을 참고한 자체 산정 기준입니다.",
+      "절대 등급: 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.",
       "상대 등급: 서울시 건물 데이터 및 유사 건물군 내 에너지 사용량 분포를 기반으로 산정한 상대 비교 결과입니다.",
       "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
-      "본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.",
+      "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost/XGBoost 기반 AI 모델과 유사건물 baseline을 활용해 참고용 사용량을 추정합니다.",
+      "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
     ],
   });
 
   return details;
+}
+
+function aiMainValue(diagnosis?: EnergyAiLiteDiagnosis | null) {
+  return (
+    diagnosis?.display_main_kwh ??
+    diagnosis?.service_reference_kwh ??
+    diagnosis?.ai_pred_kwh ??
+    diagnosis?.baseline_kwh ??
+    null
+  );
+}
+
+function AiSummaryCard({ label, value, desc }: { label: string; value: string; desc?: string }) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="text-xs font-black text-slate-400">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-950">{value}</div>
+      {desc && <div className="mt-2 text-xs font-bold leading-5 text-slate-500">{desc}</div>}
+    </div>
+  );
+}
+
+function AiEnergyCard({
+  title,
+  diagnosis,
+  missingMessage,
+  gasCaution,
+}: {
+  title: string;
+  diagnosis?: EnergyAiLiteDiagnosis | null;
+  missingMessage: string;
+  gasCaution?: boolean;
+}) {
+  if (!diagnosis?.backend_has_result) {
+    return (
+      <section className="rounded-3xl border border-dashed border-slate-200 bg-white p-7 shadow-sm">
+        <h2 className="text-xl font-black text-slate-950">{title}</h2>
+        <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{missingMessage}</p>
+      </section>
+    );
+  }
+
+  const badges = [
+    diagnosis.diagnosis_label,
+    diagnosis.confidence_label ? `신뢰도 ${diagnosis.confidence_label}` : "",
+    diagnosis.front_badge,
+    diagnosis.quality_flag,
+  ].filter(Boolean);
+  const metricRows = [
+    ["핵심 표시값", formatOptionalNumber(aiMainValue(diagnosis), "kWh")],
+    ["AI 예측값", formatOptionalNumber(diagnosis.ai_pred_kwh, "kWh")],
+    ["유사건물 baseline", formatOptionalNumber(diagnosis.baseline_kwh, "kWh")],
+    ["서비스 기준값", formatOptionalNumber(diagnosis.service_reference_kwh, "kWh")],
+    ["예측 원단위", formatOptionalNumber(diagnosis.estimated_per_area_year, "kWh/㎡·년")],
+    ["유사군 중앙값 대비", formatOptionalNumber(diagnosis.vs_peer_median_pct, "%")],
+  ];
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-950">{title}</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {badges.map((badge) => (
+              <span key={badge} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+                {badge}
+              </span>
+            ))}
+          </div>
+        </div>
+        {diagnosis.backend_needs_user_input && (
+          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">
+            실제 고지서 확인 권장
+          </span>
+        )}
+      </div>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        {metricRows.map(([label, value]) => (
+          <div key={label} className="rounded-2xl bg-slate-50 p-4">
+            <div className="text-xs font-black text-slate-400">{label}</div>
+            <div className="mt-2 text-lg font-black text-slate-950">{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {(diagnosis.quality_reason || diagnosis.service_strategy) && (
+        <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+          {diagnosis.quality_reason || "추정 품질과 비교군 기준을 함께 확인해 주세요."}
+          {diagnosis.service_strategy && <span> 서비스 전략: {diagnosis.service_strategy}</span>}
+        </div>
+      )}
+      {gasCaution && (
+        <p className="mt-4 text-sm font-semibold leading-6 text-slate-500">
+          가스 사용량은 난방방식, 지역난방 여부, 온수·취사 방식에 따라 차이가 커 실제 고지서 확인이 필요합니다.
+        </p>
+      )}
+      {diagnosis.summary && (
+        <div className="mt-5">
+          <div className="text-sm font-black text-slate-400">AI 요약</div>
+          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">{diagnosis.summary}</p>
+        </div>
+      )}
+      {diagnosis.recommendation && (
+        <div className="mt-5">
+          <div className="text-sm font-black text-slate-400">권고 사항</div>
+          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">{diagnosis.recommendation}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AiEstimatedDashboard({
+  report,
+  address,
+}: {
+  report: ReportApiResponse;
+  address: string;
+}) {
+  const building = report.building;
+  const aiDiagnosis = report.ai_diagnosis;
+  const electric = aiDiagnosis?.electric;
+  const gas = aiDiagnosis?.gas;
+  const needsUserInput = Boolean(aiDiagnosis?.needs_user_input);
+  const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
+    address: building.display_address || building.road_address || address,
+    building_id: String(building.building_id ?? building.id ?? ""),
+  }).toString()}`;
+  const buildingDescriptor = formatBuildingDescriptor(building);
+  const buildingMeta = [
+    building.road_address || building.display_address,
+    buildingDescriptor,
+    formatArea(building.gross_floor_area),
+  ].filter(Boolean);
+
+  return (
+    <main className="min-h-screen bg-slate-50 pb-16">
+      <section className="border-b border-amber-100 bg-white py-10">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-black tracking-[0.25em] text-amber-600">AI 추정 진단 대시보드</p>
+              <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
+              <p className="mt-3 text-slate-600">{buildingMeta.join(" · ")}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {["AI 추정 기반", "참고용 진단", needsUserInput ? "데이터 확인 필요" : "추정 결과 확인"].map((badge) => (
+                  <span key={badge} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Link
+              href={manualEnergyHref}
+              className="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white"
+            >
+              실제 사용량 입력하기
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-10">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <AiSummaryCard label="진단 방식" value="AI 추정 기반" desc="실측 사용량 부족 시 참고용으로 표시" />
+          <AiSummaryCard label="전기 추정 사용량" value={formatOptionalNumber(aiMainValue(electric), "kWh")} desc="display_main 우선" />
+          <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} desc="display_main 우선" />
+          <AiSummaryCard label="전기 신뢰도" value={electric?.confidence_label || "산정 불가"} desc={electric?.front_badge || electric?.quality_flag || ""} />
+          <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
+        </div>
+
+        {needsUserInput && (
+          <section className="mt-8 rounded-3xl border border-amber-100 bg-amber-50 p-6">
+            <h2 className="text-lg font-black text-slate-950">정확한 진단을 위해 실제 사용량 입력을 권장합니다.</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
+              AI 추정값과 유사건물 기준값 차이가 크거나 신뢰도가 낮은 경우, 전기·가스 고지서 기반 사용량을 입력하면 더 현실적인 진단 흐름으로 이어갈 수 있습니다.
+            </p>
+            <Link
+              href={manualEnergyHref}
+              className="mt-5 inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white"
+            >
+              고지서 기반으로 다시 진단하기
+            </Link>
+          </section>
+        )}
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+          <AiEnergyCard title="전기 AI 진단" diagnosis={electric} missingMessage="전기 추정 결과가 아직 없습니다." />
+          <AiEnergyCard title="가스 AI 진단" diagnosis={gas} missingMessage="가스 추정 결과가 아직 없습니다." gasCaution />
+        </div>
+
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <h2 className="text-xl font-black text-slate-950">분석 기준 안내</h2>
+          <div className="mt-4 space-y-3 text-sm font-semibold leading-7 text-slate-600">
+            <p>절대 등급은 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.</p>
+            <p>AI 추정 진단은 CatBoost/XGBoost 기반 AI 모델, 유사건물 baseline, 서비스 기준값을 함께 활용한 참고용 결과입니다.</p>
+            <p>가스는 난방방식, 지역난방 여부, 온수·취사 방식에 따라 오차가 커질 수 있으므로 실제 고지서 확인이 필요합니다.</p>
+            <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
+          </div>
+        </section>
+
+        <p className="mt-4 text-xs font-semibold leading-5 text-slate-400">
+          ※ 본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.
+        </p>
+      </section>
+    </main>
+  );
 }
 
 function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
@@ -548,6 +765,10 @@ export default async function DashboardPage({
     address: building.display_address || building.road_address || address,
     building_id: String(building.building_id ?? building.id ?? ""),
   }).toString()}`;
+
+  if (report.report_mode === "estimated") {
+    return <AiEstimatedDashboard report={report} address={address} />;
+  }
 
   if (report.status === "energy_data_missing" || report.energy?.source === "none") {
     return (
