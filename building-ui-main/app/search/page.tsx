@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   createReportForBuilding,
@@ -43,6 +43,49 @@ function buildingScale(building: BuildingSearchItem) {
   return parts.join(" · ");
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function friendlySearchError(error: unknown) {
+  console.error(error);
+  if (error instanceof TypeError && error.message.toLowerCase().includes("fetch")) {
+    return "서버와 연결하지 못했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.";
+  }
+  return "건물 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function SearchLoadingState({ onCancel }: { onCancel: () => void }) {
+  return (
+    <div className="mb-4 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-black text-slate-950">검색 중입니다...</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            조건에 맞는 건물을 불러오고 있습니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
+        >
+          검색 취소
+        </button>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="rounded-2xl bg-slate-50 p-4">
+            <div className="h-3 w-20 rounded-full bg-slate-200" />
+            <div className="mt-4 h-4 w-full rounded-full bg-slate-200" />
+            <div className="mt-2 h-4 w-3/4 rounded-full bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SearchPage() {
   const router = useRouter();
   const [district, setDistrict] = useState("");
@@ -57,7 +100,10 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [searched, setSearched] = useState(false);
+  const searchControllerRef = useRef<AbortController | null>(null);
+  const latestRequestIdRef = useRef(0);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / LIMIT)), [total]);
   const dongs = useMemo(() => {
@@ -75,6 +121,7 @@ export default function SearchPage() {
   };
 
   useEffect(() => {
+    searchControllerRef.current?.abort();
     setDong("");
     setItems([]);
     setTotal(0);
@@ -82,7 +129,16 @@ export default function SearchPage() {
     setSearched(false);
     setPage(1);
     setSelectedBuilding(null);
+    setLoading(false);
+    setError("");
+    setStatusMessage("");
   }, [district]);
+
+  useEffect(() => {
+    return () => {
+      searchControllerRef.current?.abort();
+    };
+  }, []);
 
   const currentFilters = (): SearchFilters => ({
     district,
@@ -92,12 +148,19 @@ export default function SearchPage() {
   });
 
   const runSearch = async (nextPage = 1, filters = currentFilters()) => {
+    const cleanFilters = {
+      district: filters.district.trim(),
+      dong: filters.dong.trim(),
+      query: filters.query.trim(),
+      buildingKeyword: filters.buildingKeyword.trim(),
+    };
     const hasSearchCondition = Boolean(
-      filters.district || filters.dong || filters.query.trim() || filters.buildingKeyword.trim(),
+      cleanFilters.district || cleanFilters.dong || cleanFilters.query || cleanFilters.buildingKeyword,
     );
 
     if (!hasSearchCondition) {
       setError("구, 동, 세부 주소 또는 건물명·동명 중 하나 이상을 입력해주세요.");
+      setStatusMessage("");
       setItems([]);
       setTotal(0);
       setHasNext(false);
@@ -105,42 +168,73 @@ export default function SearchPage() {
       return;
     }
 
+    searchControllerRef.current?.abort();
+    const controller = new AbortController();
+    searchControllerRef.current = controller;
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
+
     setLoading(true);
     setError("");
+    setStatusMessage("");
     setSelectedBuilding(null);
     setSearched(true);
 
     try {
       const result = await searchBuildings({
-        district: filters.district,
-        dong: filters.dong,
-        query: filters.query,
-        building_keyword: filters.buildingKeyword,
-        page: nextPage,
+        district: cleanFilters.district,
+        dong: cleanFilters.dong,
+        query: cleanFilters.query,
+        building_keyword: cleanFilters.buildingKeyword,
+        page: Math.max(1, nextPage),
         limit: LIMIT,
+        signal: controller.signal,
       });
+      if (latestRequestIdRef.current !== requestId) {
+        return;
+      }
       setItems(result.items);
       setPage(result.page);
       setTotal(result.total);
       setHasNext(result.has_next);
     } catch (err: unknown) {
+      if (latestRequestIdRef.current !== requestId) {
+        return;
+      }
+      if (isAbortError(err)) {
+        setStatusMessage("검색이 취소되었습니다.");
+        return;
+      }
       setItems([]);
       setTotal(0);
       setHasNext(false);
-      setError(err instanceof Error ? err.message : "주소 검색 중 오류가 발생했습니다.");
+      setError(friendlySearchError(err));
     } finally {
-      setLoading(false);
+      if (latestRequestIdRef.current === requestId) {
+        setLoading(false);
+        if (searchControllerRef.current === controller) {
+          searchControllerRef.current = null;
+        }
+      }
     }
+  };
+
+  const handleCancelSearch = () => {
+    latestRequestIdRef.current += 1;
+    searchControllerRef.current?.abort();
+    searchControllerRef.current = null;
+    setLoading(false);
+    setStatusMessage("검색이 취소되었습니다.");
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const nextFilters = {
-      district: String(formData.get("district") || ""),
-      dong: String(formData.get("dong") || ""),
-      query: String(formData.get("query") || ""),
-      buildingKeyword: String(formData.get("building_keyword") || ""),
+      district: String(formData.get("district") || "").trim(),
+      dong: String(formData.get("dong") || "").trim(),
+      query: String(formData.get("query") || "").trim(),
+      buildingKeyword: String(formData.get("building_keyword") || "").trim(),
     };
 
     setDistrict(nextFilters.district);
@@ -162,7 +256,8 @@ export default function SearchPage() {
       await createReportForBuilding(selectedBuilding);
       router.push(dashboardHrefForBuilding(selectedBuilding));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "진단 요청 중 오류가 발생했습니다.");
+      console.error(err);
+      setError("진단 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setReportLoading(false);
     }
@@ -289,6 +384,11 @@ export default function SearchPage() {
             {error}
           </div>
         )}
+        {statusMessage && !error && (
+          <div className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm font-semibold text-slate-600">
+            {statusMessage}
+          </div>
+        )}
 
         <section className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
           <div>
@@ -305,6 +405,8 @@ export default function SearchPage() {
                 </div>
               )}
             </div>
+
+            {loading && <SearchLoadingState onCancel={handleCancelSearch} />}
 
             <div className="space-y-4">
               {items.map((building) => {
@@ -375,7 +477,7 @@ export default function SearchPage() {
               <div className="rounded-3xl border border-dashed border-emerald-200 bg-emerald-50 p-8 text-center">
                 <h3 className="text-lg font-black text-slate-950">검색 결과가 없습니다.</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  구와 동을 조금 넓히거나 세부 주소를 줄여 다시 검색해 주세요.
+                  건물명·동명을 비우거나, 구와 동을 조금 넓히고 세부 주소를 짧게 줄여 다시 검색해 주세요.
                 </p>
               </div>
             )}

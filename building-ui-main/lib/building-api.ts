@@ -253,6 +253,7 @@ export type BuildingSearchParams = {
   building_keyword?: string;
   page?: number;
   limit?: number;
+  signal?: AbortSignal;
 };
 
 export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
@@ -260,8 +261,8 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
   const dong = paramsInput.dong?.trim() || "";
   const query = paramsInput.query?.trim() || "";
   const buildingKeyword = paramsInput.building_keyword?.trim() || "";
-  const page = paramsInput.page || 1;
-  const limit = paramsInput.limit || 20;
+  const page = Math.max(1, paramsInput.page || 1);
+  const limit = Math.min(50, Math.max(1, paramsInput.limit || 20));
 
   if (!district && !dong && !query && !buildingKeyword) {
     return {
@@ -291,6 +292,7 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
 
   const response = await fetch(`${API_BASE_URL}/api/buildings?${params.toString()}`, {
     cache: "no-store",
+    signal: paramsInput.signal,
   });
 
   if (!response.ok) {

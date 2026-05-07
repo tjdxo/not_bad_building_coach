@@ -234,6 +234,10 @@ type SummaryCard = {
   title?: string;
 };
 
+function isDisplayNumber(value?: number | null): value is number {
+  return value !== null && value !== undefined && Number.isFinite(value);
+}
+
 function formatSignedPercent(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return null;
@@ -286,7 +290,7 @@ function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
   }
 
   if (status === "under_3000_out_of_scope") {
-    return { value: "적용 제외", desc: "절대등급 적용 제외" };
+    return { value: "적용 제외", desc: "연면적 기준 적용 제외" };
   }
 
   if (status === "excluded_residential") {
@@ -294,13 +298,27 @@ function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
   }
 
   if (!absoluteGrade.grade) {
-    return { value: "산정 불가", desc: status ? "절대등급 적용 제외" : "서울시 기준 데이터 없음" };
+    return { value: "산정 불가", desc: "절대등급 산정 기준 확인 불가" };
   }
 
   return {
     value: absoluteGrade.grade,
-    desc: status === "ok" ? "서울시 기준" : status || "서울시 기준",
+    desc: "서울시 및 공공 데이터 기반 자체 산정",
   };
+}
+
+function absoluteGradeReason(status?: string | null) {
+  if (!status) {
+    return "원인: 절대등급 산정 기준을 확인할 수 없습니다.";
+  }
+
+  const labels: Record<string, string> = {
+    excluded_residential: "원인: 주거용 건물은 현재 절대등급 산정 기준 적용 대상이 아닙니다.",
+    under_3000_out_of_scope: "원인: 연면적 3,000㎡ 미만 건물은 현재 절대등급 산정 기준 적용 대상이 아닙니다.",
+    ok: "서울시 및 공공 데이터 기반 자체 기준으로 절대등급을 산정했습니다.",
+  };
+
+  return labels[status] || "원인: 절대등급 산정 기준을 확인할 수 없습니다.";
 }
 
 function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
@@ -313,8 +331,8 @@ function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
     value: relativeGrade.grade,
     desc:
       relativeGrade.source === "appendix1_proxy_grade_by_current_peer_percentile"
-        ? "현재 유사군 기준 proxy"
-        : "서울 전체 분포 기준",
+        ? "현재 유사군 분포 기준 보정"
+        : "서울시 건물 분포 기준",
   };
 }
 
@@ -363,6 +381,7 @@ function buildSummaryCards(peerBenchmark?: PeerBenchmark | null): SummaryCard[] 
 function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
   const absoluteGrade = peerBenchmark?.absolute_grade;
   const absoluteStatus = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
+  const absoluteEnergyIntensity = absoluteGrade?.energy_intensity;
   const relativeGrade = peerBenchmark?.relative_grade;
   const details = [];
 
@@ -373,10 +392,10 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
       absoluteGrade?.grade_type && absoluteGrade?.area_band
         ? `서울시 기준 ${absoluteGrade.grade_type} / ${absoluteGrade.area_band}㎡ 구간`
         : absoluteGradeSummary(peerBenchmark).desc,
-      absoluteGrade?.energy_intensity !== null && absoluteGrade?.energy_intensity !== undefined
-        ? `원단위 ${formatNumber(absoluteGrade.energy_intensity, 1)}`
-        : "",
-      absoluteStatus && absoluteStatus !== "ok" ? `상태 ${absoluteStatus}` : "",
+      isDisplayNumber(absoluteEnergyIntensity)
+        ? `원단위 ${formatNumber(absoluteEnergyIntensity, 1)}`
+        : "원단위 산정 불가",
+      absoluteGradeReason(absoluteStatus),
     ].filter((line): line is string => Boolean(line)),
   });
 
@@ -385,8 +404,20 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     value: relativeGradeSummary(peerBenchmark).value,
     lines: [
       relativeGradeSummary(peerBenchmark).desc,
+      "대상 건물이 서울시 건물 데이터 및 유사군 분포 안에서 어느 정도 위치에 있는지 보여주는 참고 지표입니다.",
       relativeGrade?.absolute_relative_grade_match === false ? "절대 등급과 상대 등급이 다릅니다." : "",
     ].filter((line): line is string => Boolean(line)),
+  });
+
+  details.push({
+    title: "분석 기준 안내",
+    value: "참고용",
+    lines: [
+      "절대 등급: 건물 에너지 원단위와 공공 에너지 효율 관련 기준을 참고한 자체 산정 기준입니다.",
+      "상대 등급: 서울시 건물 데이터 및 유사 건물군 내 에너지 사용량 분포를 기반으로 산정한 상대 비교 결과입니다.",
+      "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
+      "본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.",
+    ],
   });
 
   return details;
@@ -683,7 +714,7 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+        <div className="mt-8 grid gap-5 lg:grid-cols-3">
           {benchmarkDetails.map((detail) => (
             <section key={detail.title} className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
               <div className="text-sm font-black text-slate-400">{detail.title}</div>
@@ -696,6 +727,9 @@ export default async function DashboardPage({
             </section>
           ))}
         </div>
+        <p className="mt-4 text-xs font-semibold leading-5 text-slate-400">
+          ※ 본 제공 데이터는 공공데이터 기반의 추정·분석 결과이며 법적 효력을 가지지 않습니다. 단순 참고용으로만 활용해 주세요.
+        </p>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
