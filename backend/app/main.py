@@ -24,6 +24,8 @@ app.add_middleware(
         "http://127.0.0.1:3001",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://not-bad-building-coach.vercel.app",
+        "https://not-bad-building-coach-rafe0rkoh-rlatjdxo951-6547s-projects.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
