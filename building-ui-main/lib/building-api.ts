@@ -51,18 +51,23 @@ export type MonthlyEnergyPoint = {
   is_estimated?: boolean | null;
 };
 
-export type ElectricityMonthlyPoint = {
+export type EnergyUsageMonthlyPoint = {
   use_ym: string;
   label: string;
-  value: number;
+  value: number | null;
   is_estimated: boolean;
 };
 
 export type ReportEnergyInfo = {
   source: "db" | "none" | "manual" | "ai_placeholder" | "legacy";
   has_data: boolean;
+  months_count?: number;
+  period_start?: string | null;
+  period_end?: string | null;
   is_estimated_included: boolean;
-  electricity_monthly: ElectricityMonthlyPoint[];
+  is_estimated_gas_included?: boolean;
+  electricity_monthly: EnergyUsageMonthlyPoint[];
+  gas_monthly?: EnergyUsageMonthlyPoint[];
 };
 
 export type ReportApiResponse = {
@@ -360,23 +365,67 @@ export function estimateCarbonSaving(report: ReportApiResponse) {
   return Math.max(0.1, electricityTons + gasTons);
 }
 
+function latestTwelve<T>(items: T[]) {
+  return items.slice(-12);
+}
+
+function parseEnergyUsageMonth(point: EnergyUsageMonthlyPoint) {
+  const raw = point.use_ym || point.label;
+  const fullYearMatch = raw.match(/^(\d{4})[-.](\d{1,2})/);
+  if (fullYearMatch) {
+    return {
+      year: Number(fullYearMatch[1]),
+      month: Number(fullYearMatch[2]),
+    };
+  }
+
+  const shortYearMatch = point.label.match(/^(\d{2})[-.](\d{1,2})/);
+  if (shortYearMatch) {
+    return {
+      year: 2000 + Number(shortYearMatch[1]),
+      month: Number(shortYearMatch[2]),
+    };
+  }
+
+  return { year: 0, month: 0 };
+}
+
+function numericEnergyValue(value: number | null | undefined) {
+  return value ?? 0;
+}
+
 export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[] {
-  if (report.energy?.electricity_monthly?.length) {
-    return report.energy.electricity_monthly.map((item) => ({
-      year: Number(item.label.slice(0, 4)),
-      month: Number(item.label.slice(5, 7)),
-      use_ym: item.use_ym,
-      label: item.label,
-      is_estimated: item.is_estimated,
-      target_electricity_kwh: item.value,
-      target_gas_m3: 0,
-      peer_avg_electricity_kwh: item.value,
-      peer_avg_gas_m3: 0,
-    }));
+  const electricityMonthly = report.energy?.electricity_monthly ?? [];
+  const gasMonthly = report.energy?.gas_monthly ?? [];
+
+  if (electricityMonthly.length || gasMonthly.length) {
+    const electricityByMonth = new Map(electricityMonthly.map((item) => [item.use_ym, item]));
+    const gasByMonth = new Map(gasMonthly.map((item) => [item.use_ym, item]));
+    const baseMonthly = latestTwelve(electricityMonthly.length ? electricityMonthly : gasMonthly);
+
+    return baseMonthly.map((baseItem, index) => {
+      const electricityItem = electricityByMonth.get(baseItem.use_ym) ?? electricityMonthly[index];
+      const gasItem = gasByMonth.get(baseItem.use_ym) ?? gasMonthly[index];
+      const { year, month } = parseEnergyUsageMonth(baseItem);
+      const electricityValue = numericEnergyValue(electricityItem?.value);
+      const gasValue = numericEnergyValue(gasItem?.value);
+
+      return {
+        year,
+        month,
+        use_ym: baseItem.use_ym,
+        label: baseItem.label,
+        is_estimated: electricityItem?.is_estimated ?? false,
+        target_electricity_kwh: electricityValue,
+        target_gas_m3: gasValue,
+        peer_avg_electricity_kwh: electricityValue,
+        peer_avg_gas_m3: gasValue,
+      };
+    });
   }
 
   if (report.monthly_energy?.length) {
-    return report.monthly_energy;
+    return latestTwelve(report.monthly_energy);
   }
 
   return Array.from({ length: 12 }, (_, index) => ({

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
@@ -36,6 +36,20 @@ def _coerce_bool(value: Any) -> bool:
     return False
 
 
+def _coerce_float_or_none(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _average_present(values: List[Optional[float]]) -> float:
+    present_values = [value for value in values if value is not None]
+    return round(sum(present_values) / len(present_values), 2) if present_values else 0
+
+
 def _format_use_ym(value: Any) -> Tuple[int, int, str, str]:
     if isinstance(value, datetime):
         year = value.year
@@ -50,7 +64,7 @@ def _format_use_ym(value: Any) -> Tuple[int, int, str, str]:
         year = int(raw[0:4])
         month = int(raw[5:7])
         use_ym = raw[0:10]
-    return year, month, use_ym, f"{year}.{month:02d}"
+    return year, month, use_ym, f"{str(year)[2:]}.{month:02d}"
 
 
 def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> Dict[str, Any]:
@@ -187,21 +201,34 @@ def build_energy_usage_report(
             energy={
                 "source": "none",
                 "has_data": False,
+                "months_count": 0,
+                "period_start": None,
+                "period_end": None,
                 "is_estimated_included": False,
+                "is_estimated_gas_included": False,
                 "electricity_monthly": [],
+                "gas_monthly": [],
             },
         )
 
     monthly_energy = []
     electricity_monthly = []
-    values = []
+    gas_monthly = []
+    electricity_values: List[Optional[float]] = []
+    gas_values: List[Optional[float]] = []
     estimated_included = False
-    for row in usage_rows:
-        value = float(row.get("electricity_kwh") or 0)
+    estimated_gas_included = False
+    ordered_usage_rows = sorted(usage_rows, key=lambda row: str(row.get("use_ym") or ""))
+    for row in ordered_usage_rows:
+        electricity_value = _coerce_float_or_none(row.get("elec_qty"))
+        gas_value = _coerce_float_or_none(row.get("gas_qty"))
         year, month, use_ym, label = _format_use_ym(row.get("use_ym"))
         is_estimated = _coerce_bool(row.get("is_estimated"))
+        is_estimated_gas = _coerce_bool(row.get("is_estimated_gas"))
         estimated_included = estimated_included or is_estimated
-        values.append(value)
+        estimated_gas_included = estimated_gas_included or is_estimated_gas
+        electricity_values.append(electricity_value)
+        gas_values.append(gas_value)
         monthly_energy.append(
             schemas.MonthlyEnergyPoint(
                 year=year,
@@ -209,34 +236,46 @@ def build_energy_usage_report(
                 use_ym=use_ym,
                 label=label,
                 is_estimated=is_estimated,
-                target_electricity_kwh=value,
-                target_gas_m3=0,
-                peer_avg_electricity_kwh=value,
-                peer_avg_gas_m3=0,
+                target_electricity_kwh=electricity_value if electricity_value is not None else 0,
+                target_gas_m3=gas_value if gas_value is not None else 0,
+                peer_avg_electricity_kwh=electricity_value if electricity_value is not None else 0,
+                peer_avg_gas_m3=gas_value if gas_value is not None else 0,
             )
         )
         electricity_monthly.append(
-            schemas.ElectricityMonthlyPoint(
+            schemas.EnergyUsageMonthlyPoint(
                 use_ym=use_ym,
                 label=label,
-                value=value,
+                value=electricity_value,
                 is_estimated=is_estimated,
             )
         )
+        gas_monthly.append(
+            schemas.EnergyUsageMonthlyPoint(
+                use_ym=use_ym,
+                label=label,
+                value=gas_value,
+                is_estimated=is_estimated_gas,
+            )
+        )
 
-    avg_electricity = round(sum(values) / len(values), 2) if values else 0
+    avg_electricity = _average_present(electricity_values)
+    avg_gas = _average_present(gas_values)
+    period_start = electricity_monthly[0].use_ym if electricity_monthly else None
+    period_end = electricity_monthly[-1].use_ym if electricity_monthly else None
     raw_analysis_json = {
         "building": building,
         "energy_source": "db",
         "is_estimated_included": estimated_included,
+        "is_estimated_gas_included": estimated_gas_included,
     }
     return schemas.ReportResponse(
         building=building,
         energy_summary={
             "target_avg_electricity_kwh": avg_electricity,
-            "target_avg_gas_m3": 0,
+            "target_avg_gas_m3": avg_gas,
             "peer_avg_electricity_kwh": avg_electricity,
-            "peer_avg_gas_m3": 0,
+            "peer_avg_gas_m3": avg_gas,
             "electricity_ratio": 1,
             "gas_ratio": 1,
         },
@@ -244,21 +283,26 @@ def build_energy_usage_report(
             "peer_count": 0,
             "energy_waste_index": 100,
             "grade": "사용량 확인",
-            "interpretation": "energy_usage 테이블의 월별 전기 사용량을 기준으로 표시합니다.",
+            "interpretation": "energy_usage 테이블의 월별 전기·가스 사용량을 기준으로 표시합니다.",
         },
         monthly_energy=monthly_energy,
         report_text=(
-            f"1. 한줄 진단: {building['name']}의 최근 12개월 전기 사용량 데이터를 확인했습니다.\n"
-            "2. 왜 이렇게 분석되었는지: 현재 리포트는 energy_usage 테이블의 월별 전기 사용량을 우선 연결합니다.\n"
+            f"1. 한줄 진단: {building['name']}의 최근 12개월 전기·가스 사용량 데이터를 확인했습니다.\n"
+            "2. 왜 이렇게 분석되었는지: 현재 리포트는 energy_usage 테이블의 월별 전기·가스 사용량을 연결합니다.\n"
             "3. 우선 실행 액션 3가지: 월별 피크 확인, 계절별 사용량 비교, 고지서 데이터 보강.\n"
-            "4. 예상 관리 포인트: 가스 및 유사 건물 비교 데이터는 후속 연결이 필요합니다."
+            "4. 예상 관리 포인트: 유사 건물 비교 데이터는 후속 연결이 필요합니다."
         ),
         raw_analysis_json=raw_analysis_json,
         energy={
             "source": "db",
             "has_data": True,
+            "months_count": len(monthly_energy),
+            "period_start": period_start,
+            "period_end": period_end,
             "is_estimated_included": estimated_included,
+            "is_estimated_gas_included": estimated_gas_included,
             "electricity_monthly": electricity_monthly,
+            "gas_monthly": gas_monthly,
         },
     )
 

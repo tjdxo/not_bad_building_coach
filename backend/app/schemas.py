@@ -89,18 +89,23 @@ class MonthlyEnergyPoint(BaseModel):
     is_estimated: Optional[bool] = None
 
 
-class ElectricityMonthlyPoint(BaseModel):
+class EnergyUsageMonthlyPoint(BaseModel):
     use_ym: str
     label: str
-    value: float
+    value: Optional[float] = None
     is_estimated: bool = False
 
 
 class ReportEnergyInfo(BaseModel):
     source: str = "legacy"
     has_data: bool = True
+    months_count: int = 0
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
     is_estimated_included: bool = False
-    electricity_monthly: List[ElectricityMonthlyPoint] = Field(default_factory=list)
+    is_estimated_gas_included: bool = False
+    electricity_monthly: List[EnergyUsageMonthlyPoint] = Field(default_factory=list)
+    gas_monthly: List[EnergyUsageMonthlyPoint] = Field(default_factory=list)
 
 
 class PeerGroupInfo(BaseModel):

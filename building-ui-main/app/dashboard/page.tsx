@@ -14,6 +14,7 @@ import {
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
+  type EnergyUsageMonthlyPoint,
   type ReportApiResponse,
 } from "@/lib/building-api";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
@@ -21,8 +22,9 @@ import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 type ChartPoint = {
   month: string;
   tooltipMonth: string;
-  value: number;
-  avg: number;
+  value: number | null;
+  avg: number | null;
+  isEstimated: boolean;
 };
 
 function formatMonthShort(value?: string | null, year?: number, month?: number) {
@@ -49,12 +51,39 @@ function formatMonthTooltip(value?: string | null, year?: number, month?: number
   return raw;
 }
 
+function latestTwelve<T>(items: T[]) {
+  return items.slice(-12);
+}
+
+function buildEnergyUsageChartData(points?: EnergyUsageMonthlyPoint[]) {
+  if (!points?.length) {
+    return null;
+  }
+
+  return latestTwelve(points).map((item) => ({
+    month: formatMonthShort(item.use_ym || item.label),
+    tooltipMonth: formatMonthTooltip(item.use_ym || item.label),
+    value: item.value ?? null,
+    avg: item.value ?? null,
+    isEstimated: item.is_estimated,
+  }));
+}
+
 function buildChartData(report: ReportApiResponse, source: "electricity" | "gas") {
-  return getMonthlyEnergy(report).map((item) => ({
+  const dbData = buildEnergyUsageChartData(
+    source === "electricity" ? report.energy?.electricity_monthly : report.energy?.gas_monthly,
+  );
+
+  if (dbData) {
+    return dbData;
+  }
+
+  return latestTwelve(getMonthlyEnergy(report)).map((item) => ({
     month: formatMonthShort(item.use_ym || item.label, item.year, item.month),
     tooltipMonth: formatMonthTooltip(item.use_ym || item.label, item.year, item.month),
     value: source === "electricity" ? item.target_electricity_kwh : item.target_gas_m3,
     avg: source === "electricity" ? item.peer_avg_electricity_kwh : item.peer_avg_gas_m3,
+    isEstimated: item.is_estimated ?? false,
   }));
 }
 
@@ -90,6 +119,14 @@ function buildActions(report: ReportApiResponse) {
   return actions;
 }
 
+function formatChartValue(value: number | null, unit: string) {
+  if (value === null) {
+    return "데이터 없음";
+  }
+
+  return `${formatNumber(value, 1)} ${unit}`;
+}
+
 function BarChart({
   data,
   colorClass,
@@ -101,8 +138,11 @@ function BarChart({
   unit: string;
   emptyMessage?: string;
 }) {
-  const maxValue = Math.max(1, ...data.map((item) => Math.max(item.value, item.avg)));
-  const hasData = data.some((item) => item.value > 0 || item.avg > 0);
+  const maxValue = Math.max(
+    1,
+    ...data.map((item) => Math.max(item.value ?? 0, item.avg ?? 0)),
+  );
+  const hasData = data.some((item) => item.value !== null);
 
   if (!hasData && emptyMessage) {
     return (
@@ -115,32 +155,42 @@ function BarChart({
   return (
     <div className="mt-8 w-full min-w-0 overflow-x-hidden">
       <div className="flex h-48 w-full min-w-0 items-end gap-1 sm:gap-2">
-        {data.map((item) => (
-          <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-            <div className="flex w-full items-end justify-center gap-1">
-              <div
-                className="w-2 rounded-t bg-slate-200"
-                style={{ height: `${(item.avg / maxValue) * 160}px` }}
-                title={`${item.tooltipMonth}\n유사 건물 평균: ${formatNumber(item.avg, 1)} ${unit}`}
-              />
-              <div className="group relative flex items-end justify-center">
+        {data.map((item) => {
+          const value = item.value ?? 0;
+          const avg = item.avg ?? 0;
+          const valueLabel = formatChartValue(item.value, unit);
+          const avgLabel = formatChartValue(item.avg, unit);
+
+          return (
+            <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+              <div className="flex w-full items-end justify-center gap-1">
                 <div
-                  className={`w-3 rounded-t ${colorClass}`}
-                  style={{ height: `${(item.value / maxValue) * 160}px` }}
-                  title={`${item.tooltipMonth}\n대상 건물: ${formatNumber(item.value, 1)} ${unit}${
-                    item.avg > 0 ? `\n유사 건물 평균: ${formatNumber(item.avg, 1)} ${unit}` : ""
-                  }`}
+                  className="w-2 rounded-t bg-slate-200"
+                  style={{ height: `${(avg / maxValue) * 160}px` }}
+                  title={`${item.tooltipMonth}\n유사 건물 평균: ${avgLabel}`}
                 />
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 hidden w-44 -translate-x-1/2 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-xl group-hover:block">
-                  <div className="font-black">{item.tooltipMonth}</div>
-                  <div>대상 건물: {formatNumber(item.value, 1)} {unit}</div>
-                  {item.avg > 0 && <div>유사 건물 평균: {formatNumber(item.avg, 1)} {unit}</div>}
+                <div className="group relative flex items-end justify-center">
+                  <div
+                    className={`w-3 rounded-t ${colorClass}`}
+                    style={{ height: `${(value / maxValue) * 160}px` }}
+                    title={`${item.tooltipMonth}\n대상 건물: ${valueLabel}${
+                      item.isEstimated ? " (추정)" : ""
+                    }${item.avg !== null ? `\n유사 건물 평균: ${avgLabel}` : ""}`}
+                  />
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 hidden w-44 -translate-x-1/2 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-xl group-hover:block">
+                    <div className="font-black">{item.tooltipMonth}</div>
+                    <div>
+                      대상 건물: {valueLabel}
+                      {item.isEstimated ? " (추정)" : ""}
+                    </div>
+                    {item.avg !== null && <div>유사 건물 평균: {avgLabel}</div>}
+                  </div>
                 </div>
               </div>
+              <span className="text-[10px] font-bold text-slate-400">{item.month}</span>
             </div>
-            <span className="text-[10px] font-bold text-slate-400">{item.month}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-5 flex items-center justify-center gap-6 text-xs font-bold">
         <span className="flex items-center gap-2 text-slate-700">
@@ -348,6 +398,9 @@ export default async function DashboardPage({
 
   const electricityData = buildChartData(report, "electricity");
   const gasData = buildChartData(report, "gas");
+  const hasEstimatedData = Boolean(
+    report.energy?.is_estimated_included || report.energy?.is_estimated_gas_included,
+  );
   const actions = buildActions(report);
   const carbonSaving = estimateCarbonSaving(report);
   const buildingDescriptor = formatBuildingDescriptor(building);
@@ -385,7 +438,7 @@ export default async function DashboardPage({
                     공공 데이터 기준
                   </span>
                 )}
-                {report.energy?.is_estimated_included && (
+                {hasEstimatedData && (
                   <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
                     추정 포함
                   </span>
@@ -422,11 +475,16 @@ export default async function DashboardPage({
           <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 m³ 기준 비교</p>
+            {report.energy?.is_estimated_gas_included && (
+              <p className="mt-3 text-xs font-bold text-amber-700">
+                일부 월별 가스 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
+              </p>
+            )}
             <BarChart
               data={gasData}
               colorClass="bg-blue-500"
               unit="m³"
-              emptyMessage="가스 사용량 데이터는 추후 연동 예정입니다."
+              emptyMessage="가스 사용량 데이터는 집계되지 않았습니다"
             />
           </div>
         </div>

@@ -292,10 +292,22 @@ def get_energy_usage_for_master_building(db: Session, building_id: Any) -> List[
     statement = text("""
         SELECT
           use_ym,
-          elec_qty AS electricity_kwh,
-          is_estimated
-        FROM energy_usage
-        WHERE building_id = :building_id
+          elec_qty,
+          gas_qty,
+          is_estimated,
+          is_estimated_gas
+        FROM (
+          SELECT
+            use_ym,
+            elec_qty,
+            gas_qty,
+            is_estimated,
+            is_estimated_gas
+          FROM energy_usage
+          WHERE building_id = :building_id
+          ORDER BY use_ym DESC
+          LIMIT 12
+        ) recent
         ORDER BY use_ym ASC
     """)
     return [dict(row) for row in db.execute(statement, {"building_id": building_id}).mappings().all()]
