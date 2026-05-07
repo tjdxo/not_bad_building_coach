@@ -329,6 +329,11 @@ function absoluteGradeReason(status?: string | null) {
   return labels[status] || "원인: 절대등급 산정 기준을 확인할 수 없습니다.";
 }
 
+function shouldShowAbsoluteGrade(peerBenchmark?: PeerBenchmark | null) {
+  const absoluteGrade = peerBenchmark?.absolute_grade;
+  return Boolean(peerBenchmark?.has_data && absoluteGrade?.grade);
+}
+
 function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
   const relativeGrade = peerBenchmark?.relative_grade;
   if (!peerBenchmark?.has_data || !relativeGrade?.grade) {
@@ -556,6 +561,7 @@ function AiEstimatedDashboard({
   const gas = aiDiagnosis?.gas;
   const needsUserInput = Boolean(aiDiagnosis?.needs_user_input);
   const absoluteGrade = absoluteGradeSummary(report.peer_benchmark);
+  const showAbsoluteGrade = shouldShowAbsoluteGrade(report.peer_benchmark);
   const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
     address: building.display_address || building.road_address || address,
     building_id: String(building.building_id ?? building.id ?? ""),
@@ -577,7 +583,12 @@ function AiEstimatedDashboard({
               <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
               <p className="mt-3 text-slate-600">{buildingMeta.join(" · ")}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {[`절대 등급 ${absoluteGrade.value}`, "AI 추정 기반", "참고용 진단", needsUserInput ? "데이터 확인 필요" : "추정 결과 확인"].map((badge) => (
+                {[
+                  showAbsoluteGrade ? `절대 등급 ${absoluteGrade.value}` : "",
+                  "AI 추정 기반",
+                  "참고용 진단",
+                  needsUserInput ? "데이터 확인 필요" : "추정 결과 확인",
+                ].filter(Boolean).map((badge) => (
                   <span key={badge} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
                     {badge}
                   </span>
@@ -590,7 +601,9 @@ function AiEstimatedDashboard({
 
       <section className="mx-auto max-w-6xl px-6 py-10">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
+          {showAbsoluteGrade && (
+            <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
+          )}
           <AiSummaryCard label="진단 방식" value="AI 추정 기반" desc="실측 사용량 부족 시 참고용으로 표시" />
           <AiSummaryCard label="전기 추정 사용량" value={formatOptionalNumber(aiMainValue(electric), "kWh")} desc="display_main 우선" />
           <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} desc="display_main 우선" />
