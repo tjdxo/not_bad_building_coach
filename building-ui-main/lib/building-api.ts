@@ -58,6 +58,59 @@ export type EnergyUsageMonthlyPoint = {
   is_estimated: boolean;
 };
 
+export type PeerMetric = {
+  percentile?: number | null;
+  target_per_area?: number | null;
+  peer_mean_per_area?: number | null;
+  peer_median_per_area?: number | null;
+  vs_peer_pct?: number | null;
+  vs_peer_median_pct?: number | null;
+  status_label?: string | null;
+};
+
+export type PeerBenchmark = {
+  has_data: boolean;
+  message?: string | null;
+  peer_count?: number | null;
+  peer_total_rank?: number | null;
+  peer_best_building_id?: number | null;
+  peer_rank_label?: string | null;
+  reliability_score?: number | null;
+  reliability_label?: string | null;
+  reliability_reason?: string | null;
+  result_quality?: string | null;
+  energy_data_quality_detail?: string | null;
+  data_source_type?: string | null;
+  diagnosis_type?: string | null;
+  peer_overuse_type?: string | null;
+  electricity?: PeerMetric | null;
+  gas?: PeerMetric | null;
+  total?: PeerMetric | null;
+  absolute_grade?: {
+    grade_type?: string | null;
+    area_band?: string | null;
+    energy_intensity?: number | null;
+    grade?: string | null;
+    status?: string | null;
+    seoul_grade_applicability?: string | null;
+    threshold_A?: number | null;
+    threshold_B?: number | null;
+    threshold_C?: number | null;
+    threshold_D?: number | null;
+  } | null;
+  relative_grade?: {
+    grade?: string | null;
+    source?: string | null;
+    relative_grade_by_seoul_percentile?: string | null;
+    appendix1_proxy_grade_by_current_peer_percentile?: string | null;
+    absolute_relative_grade_match?: boolean | null;
+  } | null;
+  peer_monthly?: {
+    electricity_mean?: EnergyUsageMonthlyPoint[];
+    gas_mean?: EnergyUsageMonthlyPoint[];
+  } | null;
+};
+
 export type ReportEnergyInfo = {
   source: "db" | "none" | "manual" | "ai_placeholder" | "legacy";
   has_data: boolean;
@@ -80,6 +133,7 @@ export type ReportApiResponse = {
     label?: string | null;
   } | null;
   energy?: ReportEnergyInfo | null;
+  peer_benchmark?: PeerBenchmark | null;
   energy_summary: {
     target_avg_electricity_kwh: number;
     target_avg_gas_m3: number;
@@ -397,18 +451,26 @@ function numericEnergyValue(value: number | null | undefined) {
 export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[] {
   const electricityMonthly = report.energy?.electricity_monthly ?? [];
   const gasMonthly = report.energy?.gas_monthly ?? [];
+  const peerElectricityMonthly = report.peer_benchmark?.peer_monthly?.electricity_mean ?? [];
+  const peerGasMonthly = report.peer_benchmark?.peer_monthly?.gas_mean ?? [];
 
   if (electricityMonthly.length || gasMonthly.length) {
     const electricityByMonth = new Map(electricityMonthly.map((item) => [item.use_ym, item]));
     const gasByMonth = new Map(gasMonthly.map((item) => [item.use_ym, item]));
+    const peerElectricityByMonth = new Map(peerElectricityMonthly.map((item) => [item.use_ym, item]));
+    const peerGasByMonth = new Map(peerGasMonthly.map((item) => [item.use_ym, item]));
     const baseMonthly = latestTwelve(electricityMonthly.length ? electricityMonthly : gasMonthly);
 
     return baseMonthly.map((baseItem, index) => {
       const electricityItem = electricityByMonth.get(baseItem.use_ym) ?? electricityMonthly[index];
       const gasItem = gasByMonth.get(baseItem.use_ym) ?? gasMonthly[index];
+      const peerElectricityItem = peerElectricityByMonth.get(baseItem.use_ym);
+      const peerGasItem = peerGasByMonth.get(baseItem.use_ym);
       const { year, month } = parseEnergyUsageMonth(baseItem);
       const electricityValue = numericEnergyValue(electricityItem?.value);
       const gasValue = numericEnergyValue(gasItem?.value);
+      const peerElectricityValue = numericEnergyValue(peerElectricityItem?.value);
+      const peerGasValue = numericEnergyValue(peerGasItem?.value);
 
       return {
         year,
@@ -418,8 +480,8 @@ export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[
         is_estimated: electricityItem?.is_estimated ?? false,
         target_electricity_kwh: electricityValue,
         target_gas_m3: gasValue,
-        peer_avg_electricity_kwh: electricityValue,
-        peer_avg_gas_m3: gasValue,
+        peer_avg_electricity_kwh: peerElectricityItem ? peerElectricityValue : 0,
+        peer_avg_gas_m3: peerGasItem ? peerGasValue : 0,
       };
     });
   }

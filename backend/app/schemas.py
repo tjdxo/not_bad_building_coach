@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReportRequest(BaseModel):
-    address: str = Field(..., min_length=2, description="검색할 도로명 주소 일부")
+    address: str = Field("", description="검색할 도로명 주소 일부")
     building_id: Optional[Any] = None
     plat_plc: Optional[str] = None
     road_address: Optional[str] = None
@@ -125,3 +125,4 @@ class ReportResponse(BaseModel):
     report_text: str
     raw_analysis_json: Dict[str, Any]
     energy: Optional[ReportEnergyInfo] = None
+    peer_benchmark: Optional[Dict[str, Any]] = None

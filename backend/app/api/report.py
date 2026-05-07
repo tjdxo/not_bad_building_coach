@@ -1,3 +1,4 @@
+import math
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,10 +19,27 @@ from app.services.peer_group import find_peer_buildings
 
 router = APIRouter(tags=["report"])
 
+PEER_BENCHMARK_MONTHS: Tuple[Tuple[int, int], ...] = (
+    (2024, 11),
+    (2024, 12),
+    (2025, 1),
+    (2025, 2),
+    (2025, 3),
+    (2025, 4),
+    (2025, 5),
+    (2025, 6),
+    (2025, 7),
+    (2025, 8),
+    (2025, 9),
+    (2025, 10),
+)
+
 
 def _coerce_int(value: Any) -> int:
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null", "nan"}:
+        return 0
     try:
-        return int(value)
+        return int(float(value))
     except (TypeError, ValueError):
         return 0
 
@@ -39,10 +57,15 @@ def _coerce_bool(value: Any) -> bool:
 def _coerce_float_or_none(value: Any) -> Optional[float]:
     if value is None:
         return None
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null", "nan"}:
+        return None
     try:
-        return float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return None
+    if math.isnan(result) or math.isinf(result):
+        return None
+    return result
 
 
 def _average_present(values: List[Optional[float]]) -> float:
@@ -65,6 +88,150 @@ def _format_use_ym(value: Any) -> Tuple[int, int, str, str]:
         month = int(raw[5:7])
         use_ym = raw[0:10]
     return year, month, use_ym, f"{str(year)[2:]}.{month:02d}"
+
+
+def _format_month_parts(year: int, month: int) -> Tuple[str, str]:
+    return f"{year}-{month:02d}-01", f"{str(year)[2:]}.{month:02d}"
+
+
+def _coerce_int_or_none(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null", "nan"}:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_bool_or_none(value: Any) -> Optional[bool]:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null", "nan"}:
+        return None
+    return _coerce_bool(value)
+
+
+def _safe_string(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    result = str(value).strip()
+    if result.lower() in {"", "none", "null", "nan"}:
+        return None
+    return result
+
+
+def _peer_status_label(vs_peer_pct: Optional[float]) -> Optional[str]:
+    if vs_peer_pct is None:
+        return None
+    if vs_peer_pct >= 20:
+        return "높음"
+    if vs_peer_pct <= -20:
+        return "낮음"
+    return "평균권"
+
+
+def _build_peer_metric(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    vs_peer_pct = _coerce_float_or_none(row.get(f"{prefix}_vs_peer_pct"))
+    return {
+        "percentile": _coerce_float_or_none(row.get(f"{prefix}_percentile")),
+        "target_per_area": _coerce_float_or_none(row.get(f"target_{prefix}_per_area")),
+        "peer_mean_per_area": _coerce_float_or_none(row.get(f"peer_{prefix}_per_area_mean")),
+        "peer_median_per_area": _coerce_float_or_none(row.get(f"peer_{prefix}_per_area_median")),
+        "vs_peer_pct": vs_peer_pct,
+        "vs_peer_median_pct": _coerce_float_or_none(row.get(f"{prefix}_vs_peer_median_pct")),
+        "status_label": _peer_status_label(vs_peer_pct),
+    }
+
+
+def _build_peer_monthly_series(row: Dict[str, Any], prefix: str) -> List[Dict[str, Any]]:
+    monthly = []
+    for year, month in PEER_BENCHMARK_MONTHS:
+        use_ym, label = _format_month_parts(year, month)
+        monthly.append(
+            {
+                "use_ym": use_ym,
+                "label": label,
+                "value": _coerce_float_or_none(row.get(f"{prefix}_{year}_{month:02d}")),
+            }
+        )
+    return monthly
+
+
+def _build_peer_benchmark_response(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not row:
+        return {
+            "has_data": False,
+            "message": "이 건물의 유사군 분석 결과가 아직 없습니다.",
+        }
+
+    peer_count = _coerce_int_or_none(row.get("peer_count"))
+    peer_total_rank = _coerce_int_or_none(row.get("peer_total_rank"))
+    peer_rank_label = None
+    if peer_count and peer_count > 0 and peer_total_rank:
+        peer_rank_label = f"{peer_total_rank} / {peer_count}"
+
+    relative_grade = _safe_string(row.get("relative_grade_by_seoul_percentile"))
+    relative_grade_source = "relative_grade_by_seoul_percentile" if relative_grade else None
+    proxy_grade = _safe_string(row.get("appendix1_proxy_grade_by_current_peer_percentile"))
+    if not relative_grade and proxy_grade:
+        relative_grade = proxy_grade
+        relative_grade_source = "appendix1_proxy_grade_by_current_peer_percentile"
+
+    return {
+        "has_data": True,
+        "peer_count": peer_count,
+        "peer_total_rank": peer_total_rank,
+        "peer_best_building_id": _coerce_int_or_none(row.get("peer_best_building_id")),
+        "peer_rank_label": peer_rank_label,
+        "reliability_score": _coerce_float_or_none(row.get("reliability_score")),
+        "reliability_label": _safe_string(row.get("reliability_label")),
+        "reliability_reason": _safe_string(row.get("reliability_reason")),
+        "result_quality": _safe_string(row.get("result_quality")),
+        "energy_data_quality_detail": _safe_string(row.get("energy_data_quality_detail")),
+        "data_source_type": _safe_string(row.get("data_source_type")),
+        "diagnosis_type": _safe_string(row.get("diagnosis_type")),
+        "peer_overuse_type": _safe_string(row.get("peer_overuse_type")),
+        "electricity": _build_peer_metric(row, "elec"),
+        "gas": _build_peer_metric(row, "gas"),
+        "total": _build_peer_metric(row, "total"),
+        "absolute_grade": {
+            "grade_type": _safe_string(row.get("absolute_grade_type")),
+            "area_band": _safe_string(row.get("absolute_area_band")),
+            "energy_intensity": _coerce_float_or_none(row.get("absolute_energy_intensity")),
+            "grade": _safe_string(row.get("absolute_grade")),
+            "status": _safe_string(row.get("absolute_grade_status")),
+            "seoul_grade_applicability": _safe_string(row.get("seoul_grade_applicability")),
+            "threshold_A": _coerce_float_or_none(row.get("absolute_threshold_A")),
+            "threshold_B": _coerce_float_or_none(row.get("absolute_threshold_B")),
+            "threshold_C": _coerce_float_or_none(row.get("absolute_threshold_C")),
+            "threshold_D": _coerce_float_or_none(row.get("absolute_threshold_D")),
+        },
+        "relative_grade": {
+            "grade": relative_grade,
+            "source": relative_grade_source,
+            "relative_grade_by_seoul_percentile": _safe_string(row.get("relative_grade_by_seoul_percentile")),
+            "appendix1_proxy_grade_by_current_peer_percentile": proxy_grade,
+            "absolute_relative_grade_match": _coerce_bool_or_none(row.get("absolute_relative_grade_match")),
+        },
+        "peer_monthly": {
+            "electricity_mean": _build_peer_monthly_series(row, "peer_elec_mean"),
+            "gas_mean": _build_peer_monthly_series(row, "peer_gas_mean"),
+        },
+    }
+
+
+def _monthly_values_by_use_ym(series: List[Dict[str, Any]]) -> Dict[str, Optional[float]]:
+    return {item["use_ym"]: item.get("value") for item in series}
+
+
+def _ratio_from_pct(vs_peer_pct: Optional[float], target_average: float, peer_average: float) -> float:
+    if vs_peer_pct is not None:
+        return round(1 + (vs_peer_pct / 100), 4)
+    if peer_average > 0:
+        return round(target_average / peer_average, 4)
+    return 1
 
 
 def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> Dict[str, Any]:
@@ -173,8 +340,10 @@ def build_energy_usage_report(
     request: schemas.ReportRequest,
     building_item: Dict[str, Any],
     usage_rows: List[Dict[str, Any]],
+    peer_benchmark_row: Optional[Dict[str, Any]] = None,
 ) -> schemas.ReportResponse:
     building = _master_building_info(building_item, fallback_address=request.address)
+    peer_benchmark = _build_peer_benchmark_response(peer_benchmark_row)
 
     if not usage_rows:
         return schemas.ReportResponse(
@@ -197,7 +366,11 @@ def build_energy_usage_report(
             },
             monthly_energy=[],
             report_text="선택한 건물의 공공 에너지 사용량 데이터가 없습니다.",
-            raw_analysis_json={"building": building, "energy_source": "none"},
+            raw_analysis_json={
+                "building": building,
+                "energy_source": "none",
+                "peer_benchmark": peer_benchmark,
+            },
             energy={
                 "source": "none",
                 "has_data": False,
@@ -209,6 +382,7 @@ def build_energy_usage_report(
                 "electricity_monthly": [],
                 "gas_monthly": [],
             },
+            peer_benchmark=peer_benchmark,
         )
 
     monthly_energy = []
@@ -218,11 +392,16 @@ def build_energy_usage_report(
     gas_values: List[Optional[float]] = []
     estimated_included = False
     estimated_gas_included = False
+    peer_monthly = peer_benchmark.get("peer_monthly") if peer_benchmark.get("has_data") else {}
+    peer_electricity_by_month = _monthly_values_by_use_ym(peer_monthly.get("electricity_mean", [])) if peer_monthly else {}
+    peer_gas_by_month = _monthly_values_by_use_ym(peer_monthly.get("gas_mean", [])) if peer_monthly else {}
     ordered_usage_rows = sorted(usage_rows, key=lambda row: str(row.get("use_ym") or ""))
     for row in ordered_usage_rows:
         electricity_value = _coerce_float_or_none(row.get("elec_qty"))
         gas_value = _coerce_float_or_none(row.get("gas_qty"))
         year, month, use_ym, label = _format_use_ym(row.get("use_ym"))
+        peer_electricity_value = peer_electricity_by_month.get(use_ym)
+        peer_gas_value = peer_gas_by_month.get(use_ym)
         is_estimated = _coerce_bool(row.get("is_estimated"))
         is_estimated_gas = _coerce_bool(row.get("is_estimated_gas"))
         estimated_included = estimated_included or is_estimated
@@ -238,8 +417,8 @@ def build_energy_usage_report(
                 is_estimated=is_estimated,
                 target_electricity_kwh=electricity_value if electricity_value is not None else 0,
                 target_gas_m3=gas_value if gas_value is not None else 0,
-                peer_avg_electricity_kwh=electricity_value if electricity_value is not None else 0,
-                peer_avg_gas_m3=gas_value if gas_value is not None else 0,
+                peer_avg_electricity_kwh=peer_electricity_value if peer_electricity_value is not None else 0,
+                peer_avg_gas_m3=peer_gas_value if peer_gas_value is not None else 0,
             )
         )
         electricity_monthly.append(
@@ -261,6 +440,27 @@ def build_energy_usage_report(
 
     avg_electricity = _average_present(electricity_values)
     avg_gas = _average_present(gas_values)
+    peer_electricity_values = list(peer_electricity_by_month.values())
+    peer_gas_values = list(peer_gas_by_month.values())
+    peer_avg_electricity = _average_present(peer_electricity_values)
+    peer_avg_gas = _average_present(peer_gas_values)
+    if peer_avg_electricity == 0:
+        peer_avg_electricity = avg_electricity
+    if peer_avg_gas == 0:
+        peer_avg_gas = avg_gas
+    electricity_ratio = _ratio_from_pct(
+        peer_benchmark.get("electricity", {}).get("vs_peer_pct") if peer_benchmark.get("has_data") else None,
+        avg_electricity,
+        peer_avg_electricity,
+    )
+    gas_ratio = _ratio_from_pct(
+        peer_benchmark.get("gas", {}).get("vs_peer_pct") if peer_benchmark.get("has_data") else None,
+        avg_gas,
+        peer_avg_gas,
+    )
+    absolute_grade = peer_benchmark.get("absolute_grade", {}) if peer_benchmark.get("has_data") else {}
+    relative_grade = peer_benchmark.get("relative_grade", {}) if peer_benchmark.get("has_data") else {}
+    analysis_grade = absolute_grade.get("grade") or relative_grade.get("grade") or "사용량 확인"
     period_start = electricity_monthly[0].use_ym if electricity_monthly else None
     period_end = electricity_monthly[-1].use_ym if electricity_monthly else None
     raw_analysis_json = {
@@ -268,21 +468,27 @@ def build_energy_usage_report(
         "energy_source": "db",
         "is_estimated_included": estimated_included,
         "is_estimated_gas_included": estimated_gas_included,
+        "peer_benchmark": peer_benchmark,
     }
     return schemas.ReportResponse(
         building=building,
+        peer_group={
+            "rank": peer_benchmark.get("peer_total_rank"),
+            "total": peer_benchmark.get("peer_count"),
+            "label": peer_benchmark.get("peer_rank_label"),
+        } if peer_benchmark.get("has_data") else None,
         energy_summary={
             "target_avg_electricity_kwh": avg_electricity,
             "target_avg_gas_m3": avg_gas,
-            "peer_avg_electricity_kwh": avg_electricity,
-            "peer_avg_gas_m3": avg_gas,
-            "electricity_ratio": 1,
-            "gas_ratio": 1,
+            "peer_avg_electricity_kwh": peer_avg_electricity,
+            "peer_avg_gas_m3": peer_avg_gas,
+            "electricity_ratio": electricity_ratio,
+            "gas_ratio": gas_ratio,
         },
         analysis={
-            "peer_count": 0,
+            "peer_count": peer_benchmark.get("peer_count") or 0,
             "energy_waste_index": 100,
-            "grade": "사용량 확인",
+            "grade": analysis_grade,
             "interpretation": "energy_usage 테이블의 월별 전기·가스 사용량을 기준으로 표시합니다.",
         },
         monthly_energy=monthly_energy,
@@ -304,6 +510,7 @@ def build_energy_usage_report(
             "electricity_monthly": electricity_monthly,
             "gas_monthly": gas_monthly,
         },
+        peer_benchmark=peer_benchmark,
     )
 
 
@@ -364,10 +571,14 @@ def create_report(request: schemas.ReportRequest, db: Session = Depends(get_db))
                 "agnd_flr": request.agnd_flr,
             }
         usage_rows = crud.get_energy_usage_for_master_building(db, request.building_id)
-        return build_energy_usage_report(request, building_item, usage_rows)
+        peer_benchmark_row = crud.get_peer_benchmark_for_master_building(db, request.building_id)
+        return build_energy_usage_report(request, building_item, usage_rows, peer_benchmark_row)
 
     if request.plat_plc or request.road_address:
         return build_master_fallback_report(request)
+
+    if not request.address.strip():
+        raise HTTPException(status_code=400, detail="address 또는 building_id가 필요합니다.")
 
     try:
         building = crud.find_building_by_address(db, request.address)

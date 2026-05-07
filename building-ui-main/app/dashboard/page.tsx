@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   compareHref,
   dashboardHref,
-  estimateCarbonSaving,
   fetchReport,
   fetchReportForParams,
   formatArea,
@@ -15,6 +14,8 @@ import {
   searchBuildings,
   type BuildingSearchItem,
   type EnergyUsageMonthlyPoint,
+  type PeerBenchmark,
+  type PeerMetric,
   type ReportApiResponse,
 } from "@/lib/building-api";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
@@ -55,23 +56,35 @@ function latestTwelve<T>(items: T[]) {
   return items.slice(-12);
 }
 
-function buildEnergyUsageChartData(points?: EnergyUsageMonthlyPoint[]) {
-  if (!points?.length) {
+function buildEnergyUsageChartData(
+  targetPoints?: EnergyUsageMonthlyPoint[],
+  peerPoints?: EnergyUsageMonthlyPoint[],
+) {
+  if (!targetPoints?.length) {
     return null;
   }
 
-  return latestTwelve(points).map((item) => ({
-    month: formatMonthShort(item.use_ym || item.label),
-    tooltipMonth: formatMonthTooltip(item.use_ym || item.label),
-    value: item.value ?? null,
-    avg: item.value ?? null,
-    isEstimated: item.is_estimated,
-  }));
+  const peerByMonth = new Map((peerPoints ?? []).map((item) => [item.use_ym, item]));
+
+  return latestTwelve(targetPoints).map((item, index) => {
+    const peerItem = peerByMonth.get(item.use_ym) ?? peerPoints?.[index];
+
+    return {
+      month: formatMonthShort(item.use_ym || item.label),
+      tooltipMonth: formatMonthTooltip(item.use_ym || item.label),
+      value: item.value ?? null,
+      avg: peerItem ? peerItem.value ?? null : null,
+      isEstimated: item.is_estimated,
+    };
+  });
 }
 
 function buildChartData(report: ReportApiResponse, source: "electricity" | "gas") {
   const dbData = buildEnergyUsageChartData(
     source === "electricity" ? report.energy?.electricity_monthly : report.energy?.gas_monthly,
+    source === "electricity"
+      ? report.peer_benchmark?.peer_monthly?.electricity_mean
+      : report.peer_benchmark?.peer_monthly?.gas_mean,
   );
 
   if (dbData) {
@@ -132,17 +145,20 @@ function BarChart({
   colorClass,
   unit,
   emptyMessage,
+  peerMissingMessage,
 }: {
   data: ChartPoint[];
   colorClass: string;
   unit: string;
   emptyMessage?: string;
+  peerMissingMessage?: string;
 }) {
   const maxValue = Math.max(
     1,
     ...data.map((item) => Math.max(item.value ?? 0, item.avg ?? 0)),
   );
   const hasData = data.some((item) => item.value !== null);
+  const hasPeerData = data.some((item) => item.avg !== null);
 
   if (!hasData && emptyMessage) {
     return (
@@ -164,11 +180,13 @@ function BarChart({
           return (
             <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
               <div className="flex w-full items-end justify-center gap-1">
-                <div
-                  className="w-2 rounded-t bg-slate-200"
-                  style={{ height: `${(avg / maxValue) * 160}px` }}
-                  title={`${item.tooltipMonth}\n유사 건물 평균: ${avgLabel}`}
-                />
+                {hasPeerData && (
+                  <div
+                    className={`w-2 rounded-t ${item.avg === null ? "bg-transparent" : "bg-slate-200"}`}
+                    style={{ height: `${(avg / maxValue) * 160}px` }}
+                    title={`${item.tooltipMonth}\n유사 건물 평균: ${avgLabel}`}
+                  />
+                )}
                 <div className="group relative flex items-end justify-center">
                   <div
                     className={`w-3 rounded-t ${colorClass}`}
@@ -196,12 +214,182 @@ function BarChart({
         <span className="flex items-center gap-2 text-slate-700">
           <span className={`h-3 w-3 rounded ${colorClass}`} /> 대상 건물 ({unit})
         </span>
-        <span className="flex items-center gap-2 text-slate-500">
-          <span className="h-3 w-3 rounded bg-slate-200" /> 유사 건물 평균
-        </span>
+        {hasPeerData && (
+          <span className="flex items-center gap-2 text-slate-500">
+            <span className="h-3 w-3 rounded bg-slate-200" /> 유사 건물 평균
+          </span>
+        )}
       </div>
+      {!hasPeerData && peerMissingMessage && (
+        <p className="mt-3 text-center text-xs font-bold text-slate-400">{peerMissingMessage}</p>
+      )}
     </div>
   );
+}
+
+type SummaryCard = {
+  label: string;
+  value: string;
+  desc?: string;
+  title?: string;
+};
+
+function formatSignedPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+
+  return `${value > 0 ? "+" : ""}${formatNumber(value, 1)}%`;
+}
+
+function metricStatusLabel(metric?: PeerMetric | null) {
+  if (metric?.status_label) {
+    return metric.status_label;
+  }
+
+  const diff = metric?.vs_peer_pct;
+  if (diff === null || diff === undefined) {
+    return "산정 불가";
+  }
+  if (diff >= 20) {
+    return "높음";
+  }
+  if (diff <= -20) {
+    return "낮음";
+  }
+  return "평균권";
+}
+
+function metricDescription(metric?: PeerMetric | null) {
+  if (!metric) {
+    return "유사군 데이터 없음";
+  }
+
+  const parts = [];
+  const vsPeerPct = formatSignedPercent(metric.vs_peer_pct);
+  if (vsPeerPct) {
+    parts.push(`유사군 평균 대비 ${vsPeerPct}`);
+  }
+  if (metric.percentile !== null && metric.percentile !== undefined) {
+    parts.push(`상위 ${formatNumber(metric.percentile, 1)}% 사용량`);
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "산정 불가";
+}
+
+function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
+  const absoluteGrade = peerBenchmark?.absolute_grade;
+  const status = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
+
+  if (!peerBenchmark?.has_data || !absoluteGrade) {
+    return { value: "산정 불가", desc: "유사군 분석 결과 없음" };
+  }
+
+  if (status === "under_3000_out_of_scope") {
+    return { value: "적용 제외", desc: "절대등급 적용 제외" };
+  }
+
+  if (status === "excluded_residential") {
+    return { value: "적용 제외", desc: "주거용 건물 기준 적용 제외" };
+  }
+
+  if (!absoluteGrade.grade) {
+    return { value: "산정 불가", desc: status ? "절대등급 적용 제외" : "서울시 기준 데이터 없음" };
+  }
+
+  return {
+    value: absoluteGrade.grade,
+    desc: status === "ok" ? "서울시 기준" : status || "서울시 기준",
+  };
+}
+
+function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
+  const relativeGrade = peerBenchmark?.relative_grade;
+  if (!peerBenchmark?.has_data || !relativeGrade?.grade) {
+    return { value: "산정 불가", desc: "유사군/서울 분포 기준" };
+  }
+
+  return {
+    value: relativeGrade.grade,
+    desc:
+      relativeGrade.source === "appendix1_proxy_grade_by_current_peer_percentile"
+        ? "현재 유사군 기준 proxy"
+        : "서울 전체 분포 기준",
+  };
+}
+
+function rankSummary(peerBenchmark?: PeerBenchmark | null) {
+  if (!peerBenchmark?.has_data || !peerBenchmark.peer_rank_label) {
+    return { value: "산정 불가", desc: "유사군 순위 산정 불가" };
+  }
+
+  return {
+    value: peerBenchmark.peer_rank_label,
+    desc: "총 에너지 원단위 기준",
+  };
+}
+
+function buildSummaryCards(peerBenchmark?: PeerBenchmark | null): SummaryCard[] {
+  const absoluteGrade = absoluteGradeSummary(peerBenchmark);
+  const relativeGrade = relativeGradeSummary(peerBenchmark);
+  const rank = rankSummary(peerBenchmark);
+
+  return [
+    { label: "절대 등급", value: absoluteGrade.value, desc: absoluteGrade.desc },
+    { label: "상대 등급", value: relativeGrade.value, desc: relativeGrade.desc },
+    {
+      label: "전기",
+      value: metricStatusLabel(peerBenchmark?.electricity),
+      desc: metricDescription(peerBenchmark?.electricity),
+    },
+    {
+      label: "가스",
+      value: metricStatusLabel(peerBenchmark?.gas),
+      desc: metricDescription(peerBenchmark?.gas),
+    },
+    { label: "유사군 순위", value: rank.value, desc: rank.desc },
+    {
+      label: "신뢰도",
+      value: peerBenchmark?.has_data ? peerBenchmark.reliability_label || "산정 불가" : "산정 불가",
+      desc:
+        peerBenchmark?.reliability_score !== null && peerBenchmark?.reliability_score !== undefined
+          ? `${formatNumber(peerBenchmark.reliability_score, 1)}점`
+          : peerBenchmark?.message || "유사군 분석 결과 없음",
+      title: peerBenchmark?.reliability_reason || undefined,
+    },
+  ];
+}
+
+function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
+  const absoluteGrade = peerBenchmark?.absolute_grade;
+  const absoluteStatus = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
+  const relativeGrade = peerBenchmark?.relative_grade;
+  const details = [];
+
+  details.push({
+    title: "절대 등급",
+    value: absoluteGradeSummary(peerBenchmark).value,
+    lines: [
+      absoluteGrade?.grade_type && absoluteGrade?.area_band
+        ? `서울시 기준 ${absoluteGrade.grade_type} / ${absoluteGrade.area_band}㎡ 구간`
+        : absoluteGradeSummary(peerBenchmark).desc,
+      absoluteGrade?.energy_intensity !== null && absoluteGrade?.energy_intensity !== undefined
+        ? `원단위 ${formatNumber(absoluteGrade.energy_intensity, 1)}`
+        : "",
+      absoluteStatus && absoluteStatus !== "ok" ? `상태 ${absoluteStatus}` : "",
+    ].filter((line): line is string => Boolean(line)),
+  });
+
+  details.push({
+    title: "상대 등급",
+    value: relativeGradeSummary(peerBenchmark).value,
+    lines: [
+      relativeGradeSummary(peerBenchmark).desc,
+      relativeGrade?.absolute_relative_grade_match === false ? "절대 등급과 상대 등급이 다릅니다." : "",
+    ].filter((line): line is string => Boolean(line)),
+  });
+
+  return details;
 }
 
 function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
@@ -402,24 +590,15 @@ export default async function DashboardPage({
     report.energy?.is_estimated_included || report.energy?.is_estimated_gas_included,
   );
   const actions = buildActions(report);
-  const carbonSaving = estimateCarbonSaving(report);
   const buildingDescriptor = formatBuildingDescriptor(building);
   const buildingMeta = [
     building.road_address || building.display_address,
     buildingDescriptor,
     formatArea(building.gross_floor_area),
   ].filter(Boolean);
-  const summaryCards = [
-    { label: "효율 등급", value: report.analysis.grade },
-    { label: "전기", value: formatRatioGap(report.energy_summary.electricity_ratio) },
-    { label: "가스", value: formatRatioGap(report.energy_summary.gas_ratio) },
-    { label: "탄소 절감", value: `${formatNumber(carbonSaving, 1)}t` },
-    {
-      label: "유사군 순위",
-      value: report.peer_group?.label || "산정 예정",
-      desc: "유사 건물군 데이터 연결 후 표시됩니다.",
-    },
-  ];
+  const summaryCards = buildSummaryCards(report.peer_benchmark);
+  const benchmarkDetails = buildBenchmarkDetails(report.peer_benchmark);
+  const peerBenchmarkMissing = !report.peer_benchmark?.has_data;
 
   return (
     <main className="min-h-screen pb-16">
@@ -445,9 +624,9 @@ export default async function DashboardPage({
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               {summaryCards.map((card) => (
-                <div key={card.label} className="rounded-2xl bg-slate-50 p-4 text-center">
+                <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
                   <div className="text-xs font-black text-slate-400">{card.label}</div>
                   <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
                   {card.desc && (
@@ -470,7 +649,17 @@ export default async function DashboardPage({
                 일부 월별 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
               </p>
             )}
-            <BarChart data={electricityData} colorClass="bg-emerald-500" unit="kWh" />
+            <BarChart
+              data={electricityData}
+              colorClass="bg-emerald-500"
+              unit="kWh"
+              emptyMessage="전기 사용량 데이터가 부족합니다."
+              peerMissingMessage={
+                peerBenchmarkMissing
+                  ? "유사군 평균 데이터가 아직 연결되지 않았습니다."
+                  : "유사군 월별 평균 데이터 없음"
+              }
+            />
           </div>
           <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
@@ -484,9 +673,28 @@ export default async function DashboardPage({
               data={gasData}
               colorClass="bg-blue-500"
               unit="m³"
-              emptyMessage="가스 사용량 데이터는 집계되지 않았습니다"
+              emptyMessage="가스 사용량 데이터가 부족합니다."
+              peerMissingMessage={
+                peerBenchmarkMissing
+                  ? "유사군 평균 데이터가 아직 연결되지 않았습니다."
+                  : "유사군 월별 평균 데이터 없음"
+              }
             />
           </div>
+        </div>
+
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          {benchmarkDetails.map((detail) => (
+            <section key={detail.title} className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+              <div className="text-sm font-black text-slate-400">{detail.title}</div>
+              <div className="mt-2 text-3xl font-black text-slate-950">{detail.value}</div>
+              <div className="mt-4 space-y-2 text-sm font-semibold leading-6 text-slate-600">
+                {detail.lines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
