@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  compareHref,
+  compareHrefForReportBuilding,
   dashboardHref,
   fetchReport,
   fetchReportForParams,
@@ -9,7 +9,7 @@ import {
   getMonthlyEnergy,
   formatNumber,
   formatRatioGap,
-  reportHref,
+  reportHrefForReportBuilding,
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
@@ -701,7 +701,7 @@ export default async function DashboardPage({
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
-              <Link href={reportHref(building.road_address)} className="text-sm font-black text-emerald-600 hover:underline">
+              <Link href={reportHrefForReportBuilding(building, address)} className="text-sm font-black text-emerald-600 hover:underline">
                 전체 리포트
               </Link>
             </div>
@@ -733,7 +733,7 @@ export default async function DashboardPage({
               ))}
             </div>
             <Link
-              href={compareHref(building.road_address)}
+              href={compareHrefForReportBuilding(building, address)}
               className="mt-7 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-emerald-50"
             >
               유사 건물 상세 비교

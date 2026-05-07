@@ -1,15 +1,24 @@
 import Link from "next/link";
 import {
-  dashboardHref,
+  dashboardHrefForReportBuilding,
   fetchReport,
+  fetchReportForParams,
   formatBuildingType,
   formatNumber,
   formatRatioGap,
   getMonthlyEnergy,
-  reportHref,
+  reportHrefForReportBuilding,
   resolveAddressParam,
   type ReportApiResponse,
 } from "@/lib/building-api";
+
+function safePerArea(value: number, area: number) {
+  return area > 0 ? value / area : 0;
+}
+
+function metricStatus(value?: string | null) {
+  return value || "산정 불가";
+}
 
 function buildComparisonMetrics(report: ReportApiResponse) {
   const monthlyEnergy = getMonthlyEnergy(report);
@@ -24,9 +33,19 @@ function buildComparisonMetrics(report: ReportApiResponse) {
   const peakGas = Math.max(0, ...monthlyEnergy.map((item) => item.target_gas_m3));
   const peerPeakGas = Math.max(0, ...monthlyEnergy.map((item) => item.peer_avg_gas_m3));
   const electricityPerArea =
-    report.energy_summary.target_avg_electricity_kwh / report.building.gross_floor_area;
+    report.peer_benchmark?.electricity?.target_per_area ??
+    safePerArea(report.energy_summary.target_avg_electricity_kwh, report.building.gross_floor_area);
   const peerElectricityPerArea =
-    report.energy_summary.peer_avg_electricity_kwh / report.building.gross_floor_area;
+    report.peer_benchmark?.electricity?.peer_mean_per_area ??
+    safePerArea(report.energy_summary.peer_avg_electricity_kwh, report.building.gross_floor_area);
+  const gasPerArea =
+    report.peer_benchmark?.gas?.target_per_area ??
+    safePerArea(report.energy_summary.target_avg_gas_m3, report.building.gross_floor_area);
+  const peerGasPerArea =
+    report.peer_benchmark?.gas?.peer_mean_per_area ??
+    safePerArea(report.energy_summary.peer_avg_gas_m3, report.building.gross_floor_area);
+  const totalPerArea = report.peer_benchmark?.total?.target_per_area;
+  const peerTotalPerArea = report.peer_benchmark?.total?.peer_mean_per_area;
 
   return [
     {
@@ -50,6 +69,27 @@ function buildComparisonMetrics(report: ReportApiResponse) {
       peer: peerElectricityPerArea,
       status: electricityPerArea > peerElectricityPerArea * 1.08 ? "주의" : "평균권",
     },
+    {
+      label: "단위 면적당 가스 소비",
+      unit: "m³/㎡",
+      target: gasPerArea,
+      peer: peerGasPerArea,
+      status: gasPerArea > peerGasPerArea * 1.08 ? "주의" : "평균권",
+    },
+    ...(totalPerArea !== null &&
+    totalPerArea !== undefined &&
+    peerTotalPerArea !== null &&
+    peerTotalPerArea !== undefined
+      ? [
+          {
+            label: "총 에너지 원단위",
+            unit: "유사군 산정 단위",
+            target: totalPerArea,
+            peer: peerTotalPerArea,
+            status: metricStatus(report.peer_benchmark?.total?.status_label),
+          },
+        ]
+      : []),
     {
       label: "월 최대 전기 사용량",
       unit: "kWh",
@@ -77,7 +117,18 @@ function buildComparisonMetrics(report: ReportApiResponse) {
 export default async function ComparePage({
   searchParams,
 }: {
-  searchParams: Promise<{ address?: string; building?: string; query?: string }>;
+  searchParams: Promise<{
+    address?: string;
+    building?: string;
+    query?: string;
+    building_id?: string;
+    plat_plc?: string;
+    road_address?: string;
+    bld_nm?: string;
+    dong_nm?: string;
+    grs_ar?: string;
+    agnd_flr?: string;
+  }>;
 }) {
   const params = await searchParams;
   const address = resolveAddressParam(params);
@@ -110,7 +161,18 @@ export default async function ComparePage({
   let error = "";
 
   try {
-    report = await fetchReport(address);
+    report = params.building_id
+      ? await fetchReportForParams({
+          address,
+          building_id: params.building_id,
+          plat_plc: params.plat_plc,
+          road_address: params.road_address,
+          bld_nm: params.bld_nm,
+          dong_nm: params.dong_nm,
+          grs_ar: params.grs_ar,
+          agnd_flr: params.agnd_flr,
+        })
+      : await fetchReport(address);
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : "비교 데이터를 불러오지 못했습니다.";
   }
@@ -139,6 +201,14 @@ export default async function ComparePage({
 
   const building = report.building;
   const comparisonMetrics = buildComparisonMetrics(report);
+  const peerBenchmark = report.peer_benchmark;
+  const peerSummary = [
+    ["유사군 순위", report.peer_group?.label || peerBenchmark?.peer_rank_label || "산정 불가"],
+    ["유사군 수", peerBenchmark?.peer_count ? `${formatNumber(peerBenchmark.peer_count)}개` : "산정 불가"],
+    ["상대 등급", peerBenchmark?.relative_grade?.grade || "산정 불가"],
+    ["절대 등급", peerBenchmark?.absolute_grade?.grade || "산정 불가"],
+    ["신뢰도", peerBenchmark?.reliability_label || "산정 불가"],
+  ];
 
   return (
     <main className="min-h-screen py-12">
@@ -148,16 +218,25 @@ export default async function ComparePage({
             <p className="text-sm font-black tracking-[0.25em] text-emerald-600">유사 건물 비교</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">유사 건물 상세 비교</h1>
             <p className="mt-3 text-slate-600">
-              {building.name}와 서울권 {formatBuildingType(building.building_type)} 평균 데이터를 비교합니다.
+              {building.name}와 {peerBenchmark?.has_data ? "매핑된 유사군" : `서울권 ${formatBuildingType(building.building_type)}`} 평균 데이터를 비교합니다.
             </p>
           </div>
           <Link
-            href={dashboardHref(building.road_address)}
+            href={dashboardHrefForReportBuilding(building, address)}
             className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700"
           >
             대시보드로 돌아가기
           </Link>
         </div>
+
+        <section className="mb-8 grid gap-4 sm:grid-cols-5">
+          {peerSummary.map(([label, value]) => (
+            <div key={label} className="rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+              <div className="text-xs font-black text-slate-400">{label}</div>
+              <div className="mt-2 text-xl font-black text-slate-950">{value}</div>
+            </div>
+          ))}
+        </section>
 
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="grid grid-cols-12 gap-4 bg-slate-950 px-6 py-5 text-xs font-black uppercase tracking-wider text-white">
@@ -197,6 +276,14 @@ export default async function ComparePage({
           <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
             <h2 className="text-2xl font-black text-slate-950">비교 해석</h2>
             <div className="mt-6 space-y-5">
+              {peerBenchmark?.peer_overuse_type && (
+                <div>
+                  <h3 className="font-black text-slate-950">유사군 과다사용 유형: {peerBenchmark.peer_overuse_type}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    진단 유형은 {peerBenchmark.diagnosis_type || "유사군 비교"}이며, 신뢰도는 {peerBenchmark.reliability_label || "산정 불가"}입니다.
+                  </p>
+                </div>
+              )}
               <div>
                 <h3 className="font-black text-slate-950">전기 사용량은 {formatRatioGap(report.energy_summary.electricity_ratio)}입니다.</h3>
                 <p className="mt-2 text-sm leading-7 text-slate-600">
@@ -230,7 +317,7 @@ export default async function ComparePage({
               ))}
             </div>
             <Link
-              href={reportHref(building.road_address)}
+              href={reportHrefForReportBuilding(building, address)}
               className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition hover:bg-emerald-500"
             >
               AI 리포트 확인

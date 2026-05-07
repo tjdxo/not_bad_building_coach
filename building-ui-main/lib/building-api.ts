@@ -187,10 +187,20 @@ export function dashboardHref(address: string) {
   return `/dashboard?address=${encodeURIComponent(address)}`;
 }
 
-export function dashboardHrefForBuilding(building: BuildingSearchItem) {
+type BuildingRouteParams = {
+  address: string;
+  building_id?: string | number | null;
+  plat_plc?: string | null;
+  road_address?: string | null;
+  bld_nm?: string | null;
+  dong_nm?: string | null;
+  grs_ar?: number | null;
+  agnd_flr?: number | null;
+};
+
+function buildingRouteQuery(building: BuildingRouteParams) {
   const params = new URLSearchParams();
-  const address = building.display_address || building.road_address || building.plat_plc || "";
-  params.set("address", address);
+  params.set("address", building.address);
   if (building.building_id !== null && building.building_id !== undefined) {
     params.set("building_id", String(building.building_id));
   }
@@ -200,7 +210,17 @@ export function dashboardHrefForBuilding(building: BuildingSearchItem) {
   if (building.dong_nm) params.set("dong_nm", building.dong_nm);
   if (building.grs_ar) params.set("grs_ar", String(building.grs_ar));
   if (building.agnd_flr) params.set("agnd_flr", String(building.agnd_flr));
-  return `/dashboard?${params.toString()}`;
+  return params;
+}
+
+export function dashboardHrefForBuilding(building: BuildingSearchItem) {
+  const address = building.display_address || building.road_address || building.plat_plc || "";
+  return `/dashboard?${buildingRouteQuery({ ...building, address }).toString()}`;
+}
+
+export function dashboardHrefForReportBuilding(building: ApiBuilding, fallbackAddress = "") {
+  const address = building.display_address || building.road_address || fallbackAddress;
+  return `/dashboard?${buildingRouteQuery({ ...building, address }).toString()}`;
 }
 
 export function reportHref(address: string) {
@@ -209,6 +229,21 @@ export function reportHref(address: string) {
 
 export function compareHref(address: string) {
   return `/compare?address=${encodeURIComponent(address)}`;
+}
+
+export function reportHrefForReportBuilding(building: ApiBuilding, fallbackAddress = "") {
+  const address = building.display_address || building.road_address || fallbackAddress;
+  return `/report?${buildingRouteQuery({ ...building, address }).toString()}`;
+}
+
+export function compareHrefForReportBuilding(building: ApiBuilding, fallbackAddress = "") {
+  const address = building.display_address || building.road_address || fallbackAddress;
+  return `/compare?${buildingRouteQuery({ ...building, address }).toString()}`;
+}
+
+export function reportHrefForSearchBuilding(building: BuildingSearchItem) {
+  const address = building.display_address || building.road_address || building.plat_plc || "";
+  return `/report?${buildingRouteQuery({ ...building, address }).toString()}`;
 }
 
 export type BuildingSearchParams = {

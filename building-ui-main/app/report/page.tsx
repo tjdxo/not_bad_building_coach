@@ -1,13 +1,15 @@
 import Link from "next/link";
 import {
-  compareHref,
-  dashboardHref,
+  compareHrefForReportBuilding,
+  dashboardHrefForReportBuilding,
   estimateCarbonSaving,
   fetchReport,
+  fetchReportForParams,
   formatArea,
   formatBuildingDescriptor,
   formatNumber,
   formatRatioGap,
+  reportHrefForSearchBuilding,
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
@@ -44,7 +46,7 @@ function BuildingPicker({ buildings }: { buildings: BuildingSearchItem[] }) {
       {buildings.map((item) => (
         <Link
           key={`${item.building_id ?? item.display_address}-${item.plat_plc ?? ""}`}
-          href={`/report?address=${encodeURIComponent(item.display_address)}`}
+          href={reportHrefForSearchBuilding(item)}
           className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-emerald-200 hover:shadow-md"
         >
           <div className="text-lg font-black text-slate-950">{item.display_address}</div>
@@ -67,7 +69,18 @@ async function getSuggestions() {
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ address?: string; building?: string; query?: string }>;
+  searchParams: Promise<{
+    address?: string;
+    building?: string;
+    query?: string;
+    building_id?: string;
+    plat_plc?: string;
+    road_address?: string;
+    bld_nm?: string;
+    dong_nm?: string;
+    grs_ar?: string;
+    agnd_flr?: string;
+  }>;
 }) {
   const params = await searchParams;
   const address = resolveAddressParam(params);
@@ -104,7 +117,18 @@ export default async function ReportPage({
   let error = "";
 
   try {
-    report = await fetchReport(address);
+    report = params.building_id
+      ? await fetchReportForParams({
+          address,
+          building_id: params.building_id,
+          plat_plc: params.plat_plc,
+          road_address: params.road_address,
+          bld_nm: params.bld_nm,
+          dong_nm: params.dong_nm,
+          grs_ar: params.grs_ar,
+          agnd_flr: params.agnd_flr,
+        })
+      : await fetchReport(address);
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : "AI 리포트를 불러오지 못했습니다.";
   }
@@ -232,10 +256,10 @@ export default async function ReportPage({
         </section>
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <Link href={dashboardHref(building.road_address)} className="rounded-2xl bg-slate-100 px-6 py-4 text-center text-sm font-black text-slate-700">
+          <Link href={dashboardHrefForReportBuilding(building, address)} className="rounded-2xl bg-slate-100 px-6 py-4 text-center text-sm font-black text-slate-700">
             대시보드로 돌아가기
           </Link>
-          <Link href={compareHref(building.road_address)} className="rounded-2xl bg-emerald-600 px-6 py-4 text-center text-sm font-black text-white">
+          <Link href={compareHrefForReportBuilding(building, address)} className="rounded-2xl bg-emerald-600 px-6 py-4 text-center text-sm font-black text-white">
             상세 비교 보기
           </Link>
         </div>

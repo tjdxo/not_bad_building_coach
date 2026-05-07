@@ -234,6 +234,65 @@ def _ratio_from_pct(vs_peer_pct: Optional[float], target_average: float, peer_av
     return 1
 
 
+def _energy_waste_index_from_ratios(electricity_ratio: float, gas_ratio: float) -> float:
+    ratios = [ratio for ratio in (electricity_ratio, gas_ratio) if ratio > 0]
+    if not ratios:
+        return 100
+    return round((sum(ratios) / len(ratios)) * 100, 1)
+
+
+def _peer_interpretation(peer_benchmark: Dict[str, Any], electricity_ratio: float, gas_ratio: float) -> str:
+    if not peer_benchmark.get("has_data"):
+        return "공공 에너지 사용량을 기준으로 진단했지만 유사군 비교 결과는 아직 연결되지 않았습니다."
+
+    parts = []
+    rank_label = peer_benchmark.get("peer_rank_label")
+    if rank_label:
+        parts.append(f"유사군 총 에너지 원단위 순위는 {rank_label}입니다.")
+
+    relative_grade = (peer_benchmark.get("relative_grade") or {}).get("grade")
+    absolute_grade = (peer_benchmark.get("absolute_grade") or {}).get("grade")
+    if relative_grade or absolute_grade:
+        grade_parts = []
+        if absolute_grade:
+            grade_parts.append(f"절대등급 {absolute_grade}")
+        if relative_grade:
+            grade_parts.append(f"상대등급 {relative_grade}")
+        parts.append(", ".join(grade_parts) + "로 산정되었습니다.")
+
+    electricity_gap = round((electricity_ratio - 1) * 100, 1)
+    gas_gap = round((gas_ratio - 1) * 100, 1)
+    parts.append(f"유사군 평균 대비 전기는 {electricity_gap:+.1f}%, 가스는 {gas_gap:+.1f}% 수준입니다.")
+
+    return " ".join(parts)
+
+
+def _build_energy_usage_report_text(
+    building_name: str,
+    peer_benchmark: Dict[str, Any],
+    electricity_ratio: float,
+    gas_ratio: float,
+) -> str:
+    if peer_benchmark.get("has_data"):
+        rank = peer_benchmark.get("peer_rank_label") or "산정 가능"
+        reliability = peer_benchmark.get("reliability_label") or "신뢰도 산정"
+        overuse_type = peer_benchmark.get("peer_overuse_type") or "월별 사용량과 원단위"
+        return (
+            f"1. 한줄 진단: {building_name}의 최근 12개월 에너지 사용량과 유사군 벤치마크를 함께 확인했습니다.\n"
+            f"2. 왜 이렇게 분석되었는지: 매핑된 유사군 기준 순위는 {rank}이며, 비교 신뢰도는 {reliability}입니다. "
+            f"전기는 유사군 평균 대비 {(electricity_ratio - 1) * 100:+.1f}%, 가스는 {(gas_ratio - 1) * 100:+.1f}% 수준입니다.\n"
+            f"3. 우선 실행 액션 3가지: {overuse_type} 점검, 피크 월 운영 조건 확인, 유사군 평균을 넘는 에너지 항목부터 개선.\n"
+            "4. 예상 관리 포인트: 절대등급, 상대등급, 유사군 순위를 함께 보며 개선 우선순위를 정할 수 있습니다."
+        )
+
+    return (
+        f"1. 한줄 진단: {building_name}의 최근 12개월 전기·가스 사용량 데이터를 확인했습니다.\n"
+        "2. 왜 이렇게 분석되었는지: 현재 리포트는 energy_usage 테이블의 월별 전기·가스 사용량을 연결합니다.\n"
+        "3. 우선 실행 액션 3가지: 월별 피크 확인, 계절별 사용량 비교, 고지서 데이터 보강.\n"
+        "4. 예상 관리 포인트: 유사 건물 비교 데이터는 후속 연결이 필요합니다."
+    )
+
+
 def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> Dict[str, Any]:
     display_address = item.get("display_address") or item.get("road_address") or item.get("plat_plc") or fallback_address
     building_id = _coerce_int(item.get("building_id"))
@@ -461,6 +520,8 @@ def build_energy_usage_report(
     absolute_grade = peer_benchmark.get("absolute_grade", {}) if peer_benchmark.get("has_data") else {}
     relative_grade = peer_benchmark.get("relative_grade", {}) if peer_benchmark.get("has_data") else {}
     analysis_grade = absolute_grade.get("grade") or relative_grade.get("grade") or "사용량 확인"
+    energy_waste_index = _energy_waste_index_from_ratios(electricity_ratio, gas_ratio)
+    interpretation = _peer_interpretation(peer_benchmark, electricity_ratio, gas_ratio)
     period_start = electricity_monthly[0].use_ym if electricity_monthly else None
     period_end = electricity_monthly[-1].use_ym if electricity_monthly else None
     raw_analysis_json = {
@@ -487,16 +548,16 @@ def build_energy_usage_report(
         },
         analysis={
             "peer_count": peer_benchmark.get("peer_count") or 0,
-            "energy_waste_index": 100,
+            "energy_waste_index": energy_waste_index,
             "grade": analysis_grade,
-            "interpretation": "energy_usage 테이블의 월별 전기·가스 사용량을 기준으로 표시합니다.",
+            "interpretation": interpretation,
         },
         monthly_energy=monthly_energy,
-        report_text=(
-            f"1. 한줄 진단: {building['name']}의 최근 12개월 전기·가스 사용량 데이터를 확인했습니다.\n"
-            "2. 왜 이렇게 분석되었는지: 현재 리포트는 energy_usage 테이블의 월별 전기·가스 사용량을 연결합니다.\n"
-            "3. 우선 실행 액션 3가지: 월별 피크 확인, 계절별 사용량 비교, 고지서 데이터 보강.\n"
-            "4. 예상 관리 포인트: 유사 건물 비교 데이터는 후속 연결이 필요합니다."
+        report_text=_build_energy_usage_report_text(
+            building["name"],
+            peer_benchmark,
+            electricity_ratio,
+            gas_ratio,
         ),
         raw_analysis_json=raw_analysis_json,
         energy={
