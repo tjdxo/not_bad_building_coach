@@ -9,7 +9,6 @@ import {
   getMonthlyEnergy,
   formatNumber,
   formatRatioGap,
-  reportHrefForReportBuilding,
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
@@ -19,6 +18,7 @@ import {
   type PeerMetric,
   type ReportApiResponse,
 } from "@/lib/building-api";
+import { AiReportPanel } from "./ai-report-panel";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 
 type ChartPoint = {
@@ -611,6 +611,18 @@ function AiEstimatedDashboard({
           <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
         </div>
 
+        <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">AI 리포트</h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                AI 추정값, baseline, 서비스 기준값, 유사군 정보를 종합해 참고용 리포트를 생성합니다.
+              </p>
+            </div>
+            <AiReportPanel report={report} address={address} />
+          </div>
+        </div>
+
         <section className="mt-8 rounded-3xl border border-amber-100 bg-amber-50 p-6">
           <h2 className="text-lg font-black text-slate-950">정확한 진단을 위해 실제 사용량 입력을 권장합니다.</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
@@ -963,9 +975,7 @@ export default async function DashboardPage({
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
-              <Link href={reportHrefForReportBuilding(building, address)} className="text-sm font-black text-emerald-600 hover:underline">
-                전체 리포트
-              </Link>
+              <AiReportPanel report={report} address={address} />
             </div>
             <div className="mt-6 space-y-4">
               {actions.map((action) => (

@@ -194,6 +194,77 @@ export type ReportApiResponse = {
   ai_diagnosis?: AiDiagnosis | null;
 };
 
+export type AiReportUserAnswers = {
+  electric?: Record<string, string | string[]>;
+  gas?: Record<string, string | string[]>;
+};
+
+export type AiGeneratedReport = {
+  title?: string;
+  subtitle?: string;
+  report_mode_label?: string;
+  one_line_summary?: string;
+  overall_assessment?: {
+    grade_label?: string;
+    summary?: string;
+    confidence_label?: string;
+    caution?: string;
+  };
+  energy_summary?: {
+    electricity?: {
+      status?: string;
+      summary?: string;
+      main_reason_candidates?: string[];
+      recommended_checks?: string[];
+    };
+    gas?: {
+      status?: string;
+      summary?: string;
+      main_reason_candidates?: string[];
+      recommended_checks?: string[];
+    };
+  };
+  peer_comparison?: {
+    summary?: string;
+    rank_text?: string;
+    interpretation?: string;
+  };
+  grade_interpretation?: {
+    absolute_grade?: string;
+    relative_grade?: string;
+    caution?: string;
+  };
+  recommended_actions?: Array<{
+    priority?: number;
+    title?: string;
+    reason?: string;
+    expected_effect?: string;
+    contractor_category?: string;
+    contractor_cta_label?: string;
+  }>;
+  policy_recommendations?: Array<{
+    policy_name?: string;
+    fit_score?: number;
+    fit_label?: string;
+    reason?: string;
+    caution?: string;
+  }>;
+  user_answer_reflection?: {
+    summary?: string;
+    important_answers?: string[];
+  };
+  limitations?: string[];
+};
+
+export type AiReportApiResponse = {
+  status: "ok";
+  report_type: string;
+  report_context?: Record<string, unknown>;
+  report?: AiGeneratedReport | null;
+  raw_text?: string | null;
+  fallback?: boolean;
+};
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
@@ -433,6 +504,37 @@ export async function fetchReportForParams(params: {
   }
 
   return payload as ReportApiResponse;
+}
+
+export async function createAiReport(params: {
+  building_id: string | number;
+  report_type?: "basic" | "detailed";
+  user_answers?: AiReportUserAnswers;
+}) {
+  const response = await fetch(`${API_BASE_URL}/api/ai-report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      building_id: Number(params.building_id),
+      report_type: params.report_type ?? "basic",
+      user_answers: params.user_answers,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const detail = typeof payload?.detail === "string" ? payload.detail : "";
+    const message =
+      response.status === 503 && detail
+        ? detail
+        : detail || "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
+    throw new Error(message);
+  }
+
+  return payload as AiReportApiResponse;
 }
 
 export function formatBuildingType(type: string) {

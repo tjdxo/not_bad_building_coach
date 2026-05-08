@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.buildings import router as buildings_router
+from app.api.ai_report import router as ai_report_router
 from app.api.report import router as report_router
 from app.db import engine
 
@@ -33,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(report_router, prefix="/api")
+app.include_router(ai_report_router, prefix="/api")
 app.include_router(buildings_router, prefix="/api")
 
 
