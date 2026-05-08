@@ -436,8 +436,8 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 px-4 py-6">
-          <div className="mx-auto max-w-5xl rounded-3xl bg-slate-50 p-5 shadow-2xl sm:p-7">
+        <div className="ai-report-print-modal fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 px-4 py-6">
+          <div className="ai-report-print-container mx-auto max-w-5xl rounded-3xl bg-slate-50 p-5 shadow-2xl sm:p-7">
             <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-black text-emerald-600">AI 리포트</p>
@@ -619,17 +619,41 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
           body * {
             visibility: hidden !important;
           }
+          html,
+          body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          .ai-report-print-modal {
+            position: static !important;
+            inset: auto !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+          .ai-report-print-container {
+            width: 100% !important;
+            max-width: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: white !important;
+          }
           .ai-report-document,
           .ai-report-document * {
             visibility: visible !important;
           }
           .ai-report-document {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
             width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
             box-shadow: none !important;
             background: white !important;
+            break-inside: auto !important;
           }
           .no-print {
             display: none !important;
