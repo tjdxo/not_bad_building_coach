@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 const valuePoints = [
   {
@@ -39,14 +38,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
-              <Image
-                src="/brand-lockup-placceholder.png"
-                alt="세상에 나쁜 건물은 없다"
-                width={520}
-                height={112}
-                className="h-auto w-full max-w-[360px]"
-              />
-              <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
+              <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
                 내 건물 주소를 찾고
                 <span className="block text-emerald-600">에너지 개선 방향을 확인하세요.</span>
               </h1>
