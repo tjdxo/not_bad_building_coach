@@ -70,13 +70,13 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl">
-              <div className="rounded-3xl bg-white/10 p-6">
+            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl lg:h-full">
+              <div className="flex h-full flex-col rounded-3xl bg-white/10 p-6">
                 <p className="text-sm font-bold text-emerald-300">주소 선택 후 이어지는 진단 흐름</p>
                 <h2 className="mt-4 text-3xl font-black leading-tight">
                   검색, 선택, 비교, 리포트까지 한 화면 흐름으로 이어집니다.
                 </h2>
-                <div className="mt-8 space-y-4">
+                <div className="mt-8 flex-1 space-y-4">
                   {[
                     ["01", "구·동 필터 선택", "서울특별시 안에서 구와 법정동을 단계적으로 좁힙니다."],
                     ["02", "건물 후보 확인", "도로명주소와 지번주소를 함께 보고 정확한 건물을 선택합니다."],
