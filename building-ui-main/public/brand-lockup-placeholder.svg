@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="520" height="112" viewBox="0 0 520 112" role="img" aria-label="세상에 나쁜 건물은 없다 로고 자리">
-  <rect width="520" height="112" rx="28" fill="#ecfdf5"/>
-  <rect x="16" y="16" width="80" height="80" rx="22" fill="#059669"/>
-  <path d="M36 75V38h13c8 0 13 4 13 10 0 4-2 7-6 9 5 2 8 5 8 10 0 6-5 8-14 8H36Zm9-23h5c3 0 4-1 4-3s-2-3-5-3h-4v6Zm0 15h6c3 0 5-1 5-4 0-2-2-3-5-3h-6v7Z" fill="#fff"/>
-  <path d="M66 75V38h25v8H75v7h14v8H75v14h-9Z" fill="#fff"/>
-  <text x="116" y="52" fill="#064e3b" font-family="Arial, sans-serif" font-size="24" font-weight="800">세상에 나쁜 건물은 없다</text>
-  <text x="116" y="80" fill="#047857" font-family="Arial, sans-serif" font-size="14" font-weight="700">로고 이미지 임시 자리 · 같은 파일명으로 교체하세요</text>
-</svg>

@@ -40,7 +40,7 @@ export default function Home() {
           <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
               <Image
-                src="/brand-lockup-placeholder.svg"
+                src="/brand-lockup-placceholder.png"
                 alt="세상에 나쁜 건물은 없다"
                 width={520}
                 height={112}
@@ -59,10 +59,7 @@ export default function Home() {
                 <div className="rounded-[1.25rem] bg-emerald-50 p-6">
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-sm font-black text-white">
-                        BE
-                      </div>
-                      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">
+                      <h2 className="text-2xl font-black tracking-tight text-slate-950">
                         서울시 건물 주소 검색부터 시작합니다.
                       </h2>
                       <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -78,18 +75,6 @@ export default function Home() {
                     </Link>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2 text-sm">
-                {["송파구", "거여동", "성내천로", "마천동"].map((item) => (
-                  <Link
-                    key={item}
-                    href="/search"
-                    className="rounded-full bg-slate-100 px-4 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
-                  >
-                    {item}
-                  </Link>
-                ))}
               </div>
             </div>
 
