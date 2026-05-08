@@ -20,6 +20,7 @@ venv_*/
 *.log
 *.sqlite
 *.sqlite3
+backend/debug_ai_report_payloads/
 
 .DS_Store
 Thumbs.db

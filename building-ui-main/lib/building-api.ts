@@ -510,6 +510,7 @@ export async function createAiReport(params: {
   building_id: string | number;
   report_type?: "basic" | "detailed";
   user_answers?: AiReportUserAnswers;
+  signal?: AbortSignal;
 }) {
   const response = await fetch(`${API_BASE_URL}/api/ai-report`, {
     method: "POST",
@@ -521,17 +522,36 @@ export async function createAiReport(params: {
       report_type: params.report_type ?? "basic",
       user_answers: params.user_answers,
     }),
+    signal: params.signal,
   });
 
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const detail = typeof payload?.detail === "string" ? payload.detail : "";
+    const detailObject = typeof payload?.detail === "object" && payload.detail !== null ? payload.detail : null;
+    const detail =
+      typeof payload?.detail === "string"
+        ? payload.detail
+        : typeof detailObject?.detail === "string"
+          ? detailObject.detail
+          : "";
+    const errorCode =
+      typeof payload?.error_code === "string"
+        ? payload.error_code
+        : typeof detailObject?.error_code === "string"
+          ? detailObject.error_code
+          : "";
     const message =
-      response.status === 503 && detail
+      errorCode === "GEMINI_RATE_LIMITED"
+        ? "현재 AI 리포트 요청이 많아 잠시 후 다시 시도해주세요."
+        : response.status === 409
+          ? detail || "이미 같은 건물의 AI 리포트를 생성 중입니다. 잠시만 기다려주세요."
+          : response.status === 503 && detail
         ? detail
         : detail || "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
-    throw new Error(message);
+    const error = new Error(message);
+    error.name = errorCode || String(response.status);
+    throw error;
   }
 
   return payload as AiReportApiResponse;

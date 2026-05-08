@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   createAiReport,
   type AiGeneratedReport,
@@ -225,6 +225,9 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AiReportApiResponse | null>(null);
+  const generatingRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const answerPayload = useMemo<AiReportUserAnswers>(
     () => ({
@@ -250,11 +253,20 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
   }
 
   async function generate(withAnswers: boolean) {
+    if (generatingRef.current) {
+      return;
+    }
     if (!buildingId) {
       setError("건물 ID를 확인할 수 없어 리포트를 생성할 수 없습니다.");
       return;
     }
 
+    generatingRef.current = true;
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setIsLoading(true);
     setError("");
     try {
@@ -262,15 +274,39 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
         building_id: buildingId,
         report_type: withAnswers ? "detailed" : "basic",
         user_answers: withAnswers ? answerPayload : undefined,
+        signal: controller.signal,
       });
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
       setResult(payload);
       setStep("result");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
       console.error(err);
       setError(err instanceof Error ? err.message : "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      generatingRef.current = false;
     }
+  }
+
+  function closeModal() {
+    abortControllerRef.current?.abort();
+    requestIdRef.current += 1;
+    generatingRef.current = false;
+    setIsLoading(false);
+    setIsOpen(false);
   }
 
   function renderQuestions(section: "electric" | "gas", questions: ChoiceQuestion[]) {
@@ -336,7 +372,7 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={closeModal}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600"
               >
                 닫기
