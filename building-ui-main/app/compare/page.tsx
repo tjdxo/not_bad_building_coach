@@ -16,8 +16,37 @@ function safePerArea(value: number, area: number) {
   return area > 0 ? value / area : 0;
 }
 
-function metricStatus(value?: string | null) {
-  return value || "산정 불가";
+function energyStatus(target: number, peer: number) {
+  if (!Number.isFinite(target) || !Number.isFinite(peer) || peer <= 0) {
+    return "산정 불가";
+  }
+
+  const ratio = target / peer;
+  if (ratio <= 0.7) {
+    return "아주 좋음";
+  }
+  if (ratio <= 0.9) {
+    return "좋음";
+  }
+  if (ratio < 1.1) {
+    return "평균권";
+  }
+  if (ratio < 1.3) {
+    return "나쁨";
+  }
+  return "아주 나쁨";
+}
+
+function statusClass(status: string) {
+  const classes: Record<string, string> = {
+    "아주 좋음": "bg-emerald-50 text-emerald-700",
+    좋음: "bg-teal-50 text-teal-700",
+    평균권: "bg-amber-50 text-amber-700",
+    나쁨: "bg-orange-50 text-orange-700",
+    "아주 나쁨": "bg-rose-50 text-rose-700",
+  };
+
+  return classes[status] || "bg-slate-100 text-slate-500";
 }
 
 function buildComparisonMetrics(report: ReportApiResponse) {
@@ -53,28 +82,28 @@ function buildComparisonMetrics(report: ReportApiResponse) {
       unit: "kWh",
       target: report.energy_summary.target_avg_electricity_kwh,
       peer: report.energy_summary.peer_avg_electricity_kwh,
-      status: report.energy_summary.electricity_ratio > 1.08 ? "높음" : "평균권",
+      status: energyStatus(report.energy_summary.target_avg_electricity_kwh, report.energy_summary.peer_avg_electricity_kwh),
     },
     {
       label: "월 평균 가스 사용량",
       unit: "m³",
       target: report.energy_summary.target_avg_gas_m3,
       peer: report.energy_summary.peer_avg_gas_m3,
-      status: report.energy_summary.gas_ratio > 1.08 ? "높음" : "평균권",
+      status: energyStatus(report.energy_summary.target_avg_gas_m3, report.energy_summary.peer_avg_gas_m3),
     },
     {
       label: "단위 면적당 전력 소비",
       unit: "kWh/㎡",
       target: electricityPerArea,
       peer: peerElectricityPerArea,
-      status: electricityPerArea > peerElectricityPerArea * 1.08 ? "주의" : "평균권",
+      status: energyStatus(electricityPerArea, peerElectricityPerArea),
     },
     {
       label: "단위 면적당 가스 소비",
       unit: "m³/㎡",
       target: gasPerArea,
       peer: peerGasPerArea,
-      status: gasPerArea > peerGasPerArea * 1.08 ? "주의" : "평균권",
+      status: energyStatus(gasPerArea, peerGasPerArea),
     },
     ...(totalPerArea !== null &&
     totalPerArea !== undefined &&
@@ -86,7 +115,7 @@ function buildComparisonMetrics(report: ReportApiResponse) {
             unit: "유사군 산정 단위",
             target: totalPerArea,
             peer: peerTotalPerArea,
-            status: metricStatus(report.peer_benchmark?.total?.status_label),
+            status: energyStatus(totalPerArea, peerTotalPerArea),
           },
         ]
       : []),
@@ -95,21 +124,21 @@ function buildComparisonMetrics(report: ReportApiResponse) {
       unit: "kWh",
       target: peakElectricity,
       peer: peerPeakElectricity,
-      status: peakElectricity > peerPeakElectricity * 1.08 ? "주의" : "평균권",
+      status: energyStatus(peakElectricity, peerPeakElectricity),
     },
     {
       label: "월 최대 가스 사용량",
       unit: "m³",
       target: peakGas,
       peer: peerPeakGas,
-      status: peakGas > peerPeakGas * 1.08 ? "주의" : "평균권",
+      status: energyStatus(peakGas, peerPeakGas),
     },
     {
       label: "에너지 낭비 지수",
       unit: "점",
       target: report.analysis.energy_waste_index,
       peer: 100,
-      status: report.analysis.energy_waste_index > 110 ? "높음" : "평균권",
+      status: energyStatus(report.analysis.energy_waste_index, 100),
     },
   ];
 }
@@ -260,9 +289,7 @@ export default async function ComparePage({
                 </div>
                 <div className="col-span-1 text-center">
                   <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
-                      metric.status === "높음" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"
-                    }`}
+                    className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusClass(metric.status)}`}
                   >
                     {metric.status}
                   </span>
