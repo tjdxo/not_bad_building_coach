@@ -15,6 +15,7 @@ BUILDING_MASTER_ID_CANDIDATES = (
 )
 _building_master_id_column: Optional[str] = None
 _building_master_id_column_checked = False
+_building_master_columns: Optional[set] = None
 
 
 def _dedupe_strings(values: List[str]) -> List[str]:
@@ -112,6 +113,14 @@ def _get_building_master_id_column(db: Session) -> Optional[str]:
     )
     _building_master_id_column_checked = True
     return _building_master_id_column
+
+
+def _get_building_master_columns(db: Session) -> set:
+    global _building_master_columns
+    if _building_master_columns is None:
+        inspector = inspect(db.get_bind())
+        _building_master_columns = {column["name"] for column in inspector.get_columns("building_master")}
+    return _building_master_columns
 
 
 def search_building_master(
@@ -267,6 +276,13 @@ def get_building_master_by_id(db: Session, building_id: Any) -> Optional[Dict[st
     id_column = _get_building_master_id_column(db)
     if not id_column:
         return None
+    column_names = _get_building_master_columns(db)
+    optional_selects = [
+        column_name
+        for column_name in ("use_apr_day", "purp_nm", "main_purpose", "approval_year", "is_district_heating")
+        if column_name in column_names
+    ]
+    optional_sql = (",\n          " + ",\n          ".join(optional_selects)) if optional_selects else ""
 
     statement = text(f"""
         SELECT
@@ -280,6 +296,7 @@ def get_building_master_by_id(db: Session, building_id: Any) -> Optional[Dict[st
           grs_ar,
           agnd_flr,
           COALESCE(NULLIF(road_address, ''), NULLIF(plat_plc, ''), '') AS display_address
+          {optional_sql}
         FROM building_master
         WHERE {id_column} = :building_id
         LIMIT 1

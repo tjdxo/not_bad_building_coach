@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.services.ai_report.policy_candidates import CONTRACTOR_CATEGORIES, POLICY_CANDIDATES
+from app.services.ai_report.policy_candidates import CONTRACTOR_CATEGORIES
+from app.services.ai_report.policy_matcher import match_policies
 
 
 def safe_float(value: Any) -> Optional[float]:
@@ -223,7 +224,10 @@ def build_ai_report_context(
             "address": building.get("display_address"),
             "road_address": building.get("road_address"),
             "jibun_address": building.get("plat_plc"),
-            "purpose": building.get("main_purpose") or building.get("bld_nm"),
+            "purpose": building.get("main_purpose") or building.get("purp_nm") or building.get("bld_nm"),
+            "purp_nm": building.get("purp_nm"),
+            "main_purpose": building.get("main_purpose"),
+            "use_apr_day": building.get("use_apr_day"),
             "area_m2": safe_float(building.get("grs_ar")),
             "floor": safe_int(building.get("agnd_flr")),
             "approval_year": safe_int(building.get("approval_year")),
@@ -235,11 +239,19 @@ def build_ai_report_context(
         "grades": build_grade_context(peer_row),
         "ai_estimate": ai_estimate,
         "user_answers": user_answers or {},
-        "policy_candidates": POLICY_CANDIDATES,
         "contractor_categories": CONTRACTOR_CATEGORIES,
         "report_rules": {
             "legal_effect": "본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.",
             "official_grade_caution": "서울시 공식 등급, 인증, 지원사업 선정 결과를 의미하지 않습니다.",
         },
     }
+    context.update(
+        match_policies(
+            context["building"],
+            context["energy"],
+            context["peer_benchmark"],
+            context["ai_estimate"],
+            user_answers or {},
+        )
+    )
     return context, None

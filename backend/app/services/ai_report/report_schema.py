@@ -50,10 +50,16 @@ REPORT_JSON_SCHEMA: Dict[str, Any] = {
     ],
     "policy_recommendations": [
         {
+            "policy_id": "seoul_brp_loan",
             "policy_name": "정책 후보",
+            "category": "융자 | 보조금 | 무료 시공 지원 | 인센티브/마일리지 | 컨설팅 연계",
+            "benefit_type": "지원 유형",
             "fit_score": 60,
             "fit_label": "검토 가능",
-            "reason": "추천 이유",
+            "matched_reasons": ["추천 이유"],
+            "missing_checks": ["추가 확인 필요 정보"],
+            "recommended_next_step": "다음 행동",
+            "official_url": "공식 URL 또는 null",
             "caution": "공고문 확인 필요",
         }
     ],

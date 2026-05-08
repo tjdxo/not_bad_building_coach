@@ -197,6 +197,7 @@ export type ReportApiResponse = {
 export type AiReportUserAnswers = {
   electric?: Record<string, string | string[]>;
   gas?: Record<string, string | string[]>;
+  policy?: Record<string, string | string[]>;
 };
 
 export type AiGeneratedReport = {
@@ -243,10 +244,17 @@ export type AiGeneratedReport = {
     contractor_cta_label?: string;
   }>;
   policy_recommendations?: Array<{
+    policy_id?: string;
     policy_name?: string;
+    category?: string;
+    benefit_type?: string;
     fit_score?: number;
     fit_label?: string;
     reason?: string;
+    matched_reasons?: string[];
+    missing_checks?: string[];
+    recommended_next_step?: string;
+    official_url?: string | null;
     caution?: string;
   }>;
   user_answer_reflection?: {
