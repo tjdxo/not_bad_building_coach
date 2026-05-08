@@ -29,9 +29,9 @@ def get_openai_model_name() -> str:
 
 def get_max_output_tokens() -> int:
     try:
-        return int(os.getenv("AI_REPORT_MAX_OUTPUT_TOKENS", "2000"))
+        return int(os.getenv("AI_REPORT_MAX_OUTPUT_TOKENS", "3500"))
     except (TypeError, ValueError):
-        return 2000
+        return 3500
 
 
 def _retry_after_from_exception(exc: Exception) -> Optional[int]:

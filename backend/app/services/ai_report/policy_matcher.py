@@ -134,8 +134,8 @@ def _summary_match(policy: Dict[str, Any], score: int, reasons: List[str], missi
         "benefit_type": policy["benefit_type"],
         "fit_score": max(0, min(100, score)),
         "fit_label": _fit_label(max(0, min(100, score))),
-        "matched_reasons": reasons[:4],
-        "missing_checks": missing[:5],
+        "matched_reasons": reasons[:3],
+        "missing_checks": missing[:3],
         "recommended_next_step": "공식 안내와 최신 공고문에서 세부 대상, 한도, 신청 절차를 확인하세요.",
         "official_url": policy.get("official_url"),
         "caution": policy.get("caution"),
@@ -299,8 +299,8 @@ def match_policies(
         missing_inputs.extend(missing)
 
     matches = sorted(matches, key=lambda item: item["fit_score"], reverse=True)
-    recommended = [item for item in matches if item["fit_score"] >= 60]
-    needs_more_info = [item for item in matches if 40 <= item["fit_score"] < 60]
+    recommended = [item for item in matches if item["fit_score"] >= 60][:3]
+    needs_more_info = [item for item in matches if 40 <= item["fit_score"] < 60][:3]
     return {
         "policy_matches": recommended,
         "policy_needs_more_info": needs_more_info,

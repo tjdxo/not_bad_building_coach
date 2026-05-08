@@ -24,6 +24,11 @@ fit_score는 실제 합격률이 아니라 내부 참고용 정책 적합도다.
 서울시 공식 등급, 법적 인증, 지원사업 선정 결과처럼 단정하지 않는다.
 모든 결과는 공공데이터 및 자체 분석 로직 기반 참고용이며 법적 효력이 없다고 명시한다.
 LLM이 입력된 계산값을 임의로 바꾸지 말고, 해석과 추천에 집중한다.
+출력은 간결하게 작성한다.
+recommended_actions는 최대 4개만 작성한다.
+policy_recommendations는 report_context.policy_matches에 있는 항목 중 최대 3개만 작성한다.
+각 정책의 matched_reasons와 missing_checks는 최대 2개씩만 작성한다.
+각 설명 문장은 1~2문장으로 제한한다.
 반드시 JSON 객체 하나만 출력한다.
 """.strip()
 

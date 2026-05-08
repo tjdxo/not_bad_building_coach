@@ -436,7 +436,7 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 px-4 py-6 no-print">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 px-4 py-6">
           <div className="mx-auto max-w-5xl rounded-3xl bg-slate-50 p-5 shadow-2xl sm:p-7">
             <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -613,6 +613,9 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
 
       <style jsx global>{`
         @media print {
+          @page {
+            margin: 12mm;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -626,6 +629,7 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
             top: 0 !important;
             width: 100% !important;
             box-shadow: none !important;
+            background: white !important;
           }
           .no-print {
             display: none !important;
