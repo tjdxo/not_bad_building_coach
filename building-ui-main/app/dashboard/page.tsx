@@ -18,7 +18,9 @@ import {
   type PeerMetric,
   type ReportApiResponse,
 } from "@/lib/building-api";
+import { getGradeVisual } from "@/lib/grade-visual";
 import { AiReportPanel } from "./ai-report-panel";
+import { GradeVisualCard } from "./grade-visual-card";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 
 type ChartPoint = {
@@ -562,6 +564,16 @@ function AiEstimatedDashboard({
   const needsUserInput = Boolean(aiDiagnosis?.needs_user_input);
   const absoluteGrade = absoluteGradeSummary(report.peer_benchmark);
   const showAbsoluteGrade = shouldShowAbsoluteGrade(report.peer_benchmark);
+  const gradeVisual = getGradeVisual({
+    absoluteGrade: report.peer_benchmark?.absolute_grade?.grade,
+    absoluteStatus:
+      report.peer_benchmark?.absolute_grade?.status ||
+      report.peer_benchmark?.absolute_grade?.seoul_grade_applicability,
+    relativeGrade:
+      report.peer_benchmark?.relative_grade?.grade ||
+      report.peer_benchmark?.relative_grade?.relative_grade_by_seoul_percentile ||
+      report.peer_benchmark?.relative_grade?.appendix1_proxy_grade_by_current_peer_percentile,
+  });
   const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
     address: building.display_address || building.road_address || address,
     building_id: String(building.building_id ?? building.id ?? ""),
@@ -600,7 +612,9 @@ function AiEstimatedDashboard({
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-stretch">
+          <GradeVisualCard visual={gradeVisual} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {showAbsoluteGrade && (
             <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
           )}
@@ -609,6 +623,8 @@ function AiEstimatedDashboard({
           <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} desc="display_main 우선" />
           <AiSummaryCard label="전기 신뢰도" value={electric?.confidence_label || "산정 불가"} desc={electric?.front_badge || electric?.quality_flag || ""} />
           <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
+        </div>
+
         </div>
 
         <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
@@ -870,12 +886,22 @@ export default async function DashboardPage({
   const summaryCards = buildSummaryCards(report.peer_benchmark);
   const benchmarkDetails = buildBenchmarkDetails(report.peer_benchmark);
   const peerBenchmarkMissing = !report.peer_benchmark?.has_data;
+  const gradeVisual = getGradeVisual({
+    absoluteGrade: report.peer_benchmark?.absolute_grade?.grade,
+    absoluteStatus:
+      report.peer_benchmark?.absolute_grade?.status ||
+      report.peer_benchmark?.absolute_grade?.seoul_grade_applicability,
+    relativeGrade:
+      report.peer_benchmark?.relative_grade?.grade ||
+      report.peer_benchmark?.relative_grade?.relative_grade_by_seoul_percentile ||
+      report.peer_benchmark?.relative_grade?.appendix1_proxy_grade_by_current_peer_percentile,
+  });
 
   return (
     <main className="min-h-screen pb-16">
       <section className="border-b border-slate-200 bg-white py-10">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between">
             <div>
               <p className="text-sm font-black tracking-[0.25em] text-emerald-600">진단 대시보드</p>
               <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
@@ -895,16 +921,19 @@ export default async function DashboardPage({
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {summaryCards.map((card) => (
-                <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
-                  <div className="text-xs font-black text-slate-400">{card.label}</div>
-                  <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
-                  {card.desc && (
-                    <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
-                  )}
-                </div>
-              ))}
+            <div className="grid w-full gap-4 lg:max-w-4xl lg:grid-cols-[220px_1fr] lg:items-stretch">
+              <GradeVisualCard visual={gradeVisual} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                {summaryCards.map((card) => (
+                  <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
+                    <div className="text-xs font-black text-slate-400">{card.label}</div>
+                    <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
+                    {card.desc && (
+                      <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
