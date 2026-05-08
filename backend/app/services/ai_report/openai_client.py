@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Optional
 
@@ -5,6 +6,7 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, Authenti
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
+logger = logging.getLogger("app.ai_report.openai")
 
 
 class OpenAiReportError(Exception):
@@ -55,9 +57,23 @@ def generate_openai_json_text(system_prompt: str, user_prompt: str) -> str:
             status_code=503,
         )
 
-    client = OpenAI(api_key=api_key)
     model = get_openai_model_name()
     max_output_tokens = get_max_output_tokens()
+
+    try:
+        client = OpenAI(api_key=api_key)
+    except Exception as exc:
+        logger.warning(
+            "[ai-report] provider=openai model=%s client_init_error=%s message=%s",
+            model,
+            type(exc).__name__,
+            str(exc)[:240],
+        )
+        raise OpenAiReportError(
+            "AI API 클라이언트 초기화 중 문제가 발생했습니다. 서버 의존성 설정을 확인해야 합니다.",
+            error_code="OPENAI_CLIENT_INIT_ERROR",
+            status_code=503,
+        ) from exc
 
     try:
         response = client.responses.create(
