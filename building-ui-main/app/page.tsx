@@ -39,7 +39,7 @@ export default function Home() {
           <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
               <div className="inline-flex rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 ring-1 ring-emerald-600/20">
-                나쁜 건물은 없다 (Building Energy AI)
+                세상에 나쁜 건물은 없다
               </div>
               <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
                 내 건물 주소를 찾고
