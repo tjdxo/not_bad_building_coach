@@ -143,6 +143,169 @@ function BulletList({ items }: { items?: string[] }) {
   );
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function listHtml(items?: string[]) {
+  const visibleItems = (items ?? []).filter(Boolean);
+  if (!visibleItems.length) {
+    return '<p class="muted">표시할 항목이 없습니다.</p>';
+  }
+  return `<ul>${visibleItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function sectionHtml(title: string, body: string) {
+  return `<section class="card"><h2>${escapeHtml(title)}</h2>${body}</section>`;
+}
+
+function buildPrintableReportHtml(payload: AiReportApiResponse) {
+  const report = payload.report;
+  if (!report && payload.raw_text) {
+    return `<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8" /><title>건물 에너지 AI 진단 리포트</title>${printStyleHtml()}</head>
+<body><main class="report"><h1>건물 에너지 AI 진단 리포트</h1><p class="muted">구조화된 JSON 파싱에 실패해 원문 리포트를 표시합니다.</p><pre>${escapeHtml(payload.raw_text)}</pre></main></body>
+</html>`;
+  }
+
+  const actions = report?.recommended_actions ?? [];
+  const policies = report?.policy_recommendations ?? [];
+  return `<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8" /><title>${escapeHtml(report?.title || "건물 에너지 AI 진단 리포트")}</title>${printStyleHtml()}</head>
+<body>
+  <main class="report">
+    <header class="cover">
+      <p class="eyebrow">${escapeHtml(report?.subtitle || "공공데이터와 유사군 비교 기반 참고용 진단")}</p>
+      <h1>${escapeHtml(report?.title || "건물 에너지 AI 진단 리포트")}</h1>
+      <p class="summary">${escapeHtml(report?.one_line_summary || "건물 에너지 데이터를 기반으로 참고용 리포트를 생성했습니다.")}</p>
+      <p class="caution">${escapeHtml(report?.overall_assessment?.caution || "본 결과는 참고용이며 법적 효력을 갖지 않습니다.")}</p>
+    </header>
+
+    <div class="grid two">
+      ${sectionHtml(
+        "총정리",
+        `<p><strong>${escapeHtml(report?.overall_assessment?.grade_label || "참고용")}</strong></p><p>${escapeHtml(report?.overall_assessment?.summary || "확인 가능한 데이터 중심으로 진단했습니다.")}</p><p class="muted">신뢰도: ${escapeHtml(report?.overall_assessment?.confidence_label || "확인 필요")}</p>`,
+      )}
+      ${sectionHtml(
+        "유사군 비교",
+        `<p>${escapeHtml(report?.peer_comparison?.summary || "유사군 비교 데이터를 함께 검토했습니다.")}</p><p>${escapeHtml(report?.peer_comparison?.rank_text || "")}</p><p class="muted">${escapeHtml(report?.peer_comparison?.interpretation || "")}</p>`,
+      )}
+    </div>
+
+    ${sectionHtml(
+      "전기 핵심 진단",
+      `<p><strong>${escapeHtml(report?.energy_summary?.electricity?.status || "데이터 확인 필요")}</strong></p><p>${escapeHtml(report?.energy_summary?.electricity?.summary || "")}</p><h3>원인 후보</h3>${listHtml(report?.energy_summary?.electricity?.main_reason_candidates)}<h3>확인할 항목</h3>${listHtml(report?.energy_summary?.electricity?.recommended_checks)}`,
+    )}
+
+    ${sectionHtml(
+      "가스 핵심 진단",
+      `<p><strong>${escapeHtml(report?.energy_summary?.gas?.status || "데이터 확인 필요")}</strong></p><p>${escapeHtml(report?.energy_summary?.gas?.summary || "")}</p><h3>원인 후보</h3>${listHtml(report?.energy_summary?.gas?.main_reason_candidates)}<h3>확인할 항목</h3>${listHtml(report?.energy_summary?.gas?.recommended_checks)}`,
+    )}
+
+    ${sectionHtml(
+      "등급 해석",
+      `<p>${escapeHtml(report?.grade_interpretation?.absolute_grade || "절대 등급은 산정 가능한 경우에만 참고합니다.")}</p><p>${escapeHtml(report?.grade_interpretation?.relative_grade || "상대 등급은 유사군/분포 기반 참고 지표입니다.")}</p><p class="caution">${escapeHtml(report?.grade_interpretation?.caution || "공식 등급 또는 인증 결과가 아닙니다.")}</p>`,
+    )}
+
+    ${sectionHtml(
+      "추천 행동 및 설비 개선",
+      actions.length
+        ? actions
+            .map(
+              (action, index) => `<article class="item"><h3>${escapeHtml(action.priority || index + 1)}. ${escapeHtml(action.title || "개선 행동")}</h3><p>${escapeHtml(action.reason || "")}</p><p class="muted">${escapeHtml(action.expected_effect || "")}</p><p class="tag">추천 시공 분야: ${escapeHtml(action.contractor_category || "상담 연결 준비 중")} · ${escapeHtml(action.contractor_cta_label || "상담 연결 준비 중")}</p></article>`,
+            )
+            .join("")
+        : '<p class="muted">표시할 추천 행동이 없습니다.</p>',
+    )}
+
+    ${sectionHtml(
+      "맞춤형 지원사업 검토",
+      policies.length
+        ? policies
+            .map(
+              (policy) => `<article class="item"><h3>${escapeHtml(policy.policy_name || "정책 후보")}</h3><p class="tag">${escapeHtml(policy.category || "")} · ${escapeHtml(policy.benefit_type || "")} · 정책 적합도 ${escapeHtml(policy.fit_score || "-")}점 · ${escapeHtml(policy.fit_label || "검토 가능")}</p><h4>추천 이유</h4>${listHtml(policy.matched_reasons)}<h4>추가 확인 필요</h4>${listHtml(policy.missing_checks)}<p>${escapeHtml(policy.recommended_next_step || "")}</p>${policy.official_url ? `<p><strong>공식 안내:</strong> ${escapeHtml(policy.official_url)}</p>` : ""}<p class="caution">${escapeHtml(policy.caution || "정확한 신청 가능 여부는 관련 기관 확인이 필요합니다.")}</p></article>`,
+            )
+            .join("")
+        : '<p class="muted">현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.</p>',
+    )}
+
+    ${sectionHtml(
+      "사용자 입력 반영 및 주의사항",
+      `<p>${escapeHtml(report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다.")}</p>${listHtml([...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? [])])}`,
+    )}
+  </main>
+</body>
+</html>`;
+}
+
+function printStyleHtml() {
+  return `<style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    .report { width: 100%; margin: 0; padding: 0; }
+    .cover { border-bottom: 2px solid #111827; padding-bottom: 18px; margin-bottom: 18px; }
+    .eyebrow { margin: 0 0 8px; color: #047857; font-size: 12px; font-weight: 800; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.25; letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 17px; line-height: 1.35; }
+    h3 { margin: 10px 0 6px; font-size: 13px; line-height: 1.4; }
+    h4 { margin: 10px 0 4px; font-size: 12px; line-height: 1.4; }
+    p { margin: 6px 0; font-size: 11.5px; line-height: 1.65; }
+    ul { margin: 6px 0 0; padding-left: 18px; }
+    li { margin: 3px 0; font-size: 11px; line-height: 1.55; }
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 10.5px; line-height: 1.5; }
+    .summary { margin-top: 10px; font-size: 14px; font-weight: 700; }
+    .muted { color: #64748b; }
+    .caution { color: #92400e; font-size: 10.5px; }
+    .grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0; break-inside: avoid; page-break-inside: avoid; }
+    .item { border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
+    .item:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .tag { display: inline-block; border-radius: 999px; background: #ecfdf5; color: #047857; padding: 3px 7px; font-size: 10px; font-weight: 800; }
+  </style>`;
+}
+
+function printAiReport(payload: AiReportApiResponse) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+
+  const iframeWindow = iframe.contentWindow;
+  const iframeDocument = iframe.contentDocument || iframeWindow?.document;
+  if (!iframeWindow || !iframeDocument) {
+    iframe.remove();
+    window.print();
+    return;
+  }
+
+  iframeDocument.open();
+  iframeDocument.write(buildPrintableReportHtml(payload));
+  iframeDocument.close();
+
+  const cleanup = () => {
+    setTimeout(() => iframe.remove(), 250);
+  };
+  iframeWindow.onafterprint = cleanup;
+  setTimeout(() => {
+    iframeWindow.focus();
+    iframeWindow.print();
+    setTimeout(cleanup, 60000);
+  }, 250);
+}
+
 function EnergyReportCard({
   title,
   data,
@@ -598,7 +761,7 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.print()}
+                    onClick={() => printAiReport(result)}
                     className="no-print h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white"
                   >
                     PDF 다운로드/인쇄
