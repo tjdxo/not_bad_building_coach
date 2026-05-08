@@ -31,7 +31,7 @@ def generate_report_text(analysis_json: dict) -> str:
     try:
         client = OpenAI(api_key=api_key)
         response = client.responses.create(
-            model="gpt-4.1-mini",
+            model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
             input=[
                 {
                     "role": "system",

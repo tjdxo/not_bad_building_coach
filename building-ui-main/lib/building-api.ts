@@ -258,11 +258,14 @@ export type AiGeneratedReport = {
 
 export type AiReportApiResponse = {
   status: "ok";
+  provider?: string;
+  model?: string;
   report_type: string;
   report_context?: Record<string, unknown>;
   report?: AiGeneratedReport | null;
   raw_text?: string | null;
   fallback?: boolean;
+  cached?: boolean;
 };
 
 export const API_BASE_URL =
@@ -528,6 +531,7 @@ export async function createAiReport(params: {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    console.error("AI report API error", payload);
     const detailObject = typeof payload?.detail === "object" && payload.detail !== null ? payload.detail : null;
     const detail =
       typeof payload?.detail === "string"
@@ -541,14 +545,21 @@ export async function createAiReport(params: {
         : typeof detailObject?.error_code === "string"
           ? detailObject.error_code
           : "";
+    const errorMessages: Record<string, string> = {
+      OPENAI_CONFIG_MISSING: "AI 리포트 기능 설정을 확인해야 합니다.",
+      OPENAI_RATE_LIMITED: "현재 AI 리포트 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
+      OPENAI_BILLING_LIMIT: "AI 리포트 사용량 한도에 도달했습니다.",
+      OPENAI_AUTH_ERROR: "AI API 인증 설정을 확인해야 합니다.",
+      AI_REPORT_ALREADY_RUNNING: "이미 리포트를 생성 중입니다. 잠시만 기다려주세요.",
+      AI_REPORT_RATE_LIMITED: "AI 리포트 요청이 잠시 많습니다. 잠시 후 다시 시도해주세요.",
+      AI_REPORT_INPUT_TOO_LARGE: "리포트 입력 데이터가 너무 커서 생성할 수 없습니다.",
+      AI_REPORT_PARSE_ERROR: "AI 리포트 응답 형식을 처리하지 못했습니다.",
+      GEMINI_RATE_LIMITED: "현재 AI 리포트 요청이 많아 잠시 후 다시 시도해주세요.",
+    };
     const message =
-      errorCode === "GEMINI_RATE_LIMITED"
-        ? "현재 AI 리포트 요청이 많아 잠시 후 다시 시도해주세요."
-        : response.status === 409
-          ? detail || "이미 같은 건물의 AI 리포트를 생성 중입니다. 잠시만 기다려주세요."
-          : response.status === 503 && detail
-        ? detail
-        : detail || "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
+      errorMessages[errorCode] ||
+      detail ||
+      "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
     const error = new Error(message);
     error.name = errorCode || String(response.status);
     throw error;
