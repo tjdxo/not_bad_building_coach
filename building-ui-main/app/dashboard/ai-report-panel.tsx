@@ -6,6 +6,7 @@ import {
   createAiReport,
   type AiGeneratedReport,
   type AiReportApiResponse,
+  type AiReportAudience,
   type AiReportUserAnswers,
   type ReportApiResponse,
 } from "@/lib/building-api";
@@ -19,6 +20,37 @@ type ChoiceQuestion = {
 };
 
 type EnergySummaryBlock = NonNullable<NonNullable<AiGeneratedReport["energy_summary"]>["electricity"]>;
+
+const audienceOptions: Array<{ value: AiReportAudience; title: string; desc: string; badge: string }> = [
+  {
+    value: "building_owner",
+    title: "건물주/소유자용",
+    desc: "비용 절감과 지원사업 중심으로 쉽게 설명합니다.",
+    badge: "건물주/소유자용 리포트",
+  },
+  {
+    value: "facility_manager",
+    title: "관리자/시설관리자용",
+    desc: "운영 점검과 설비 관리 포인트를 중심으로 정리합니다.",
+    badge: "관리자용 리포트",
+  },
+  {
+    value: "contractor",
+    title: "시공·컨설팅 업체용",
+    desc: "현장 점검 항목과 개선 공사 제안 포인트를 정리합니다.",
+    badge: "시공·컨설팅용 리포트",
+  },
+  {
+    value: "policy_reviewer",
+    title: "지원사업 검토용",
+    desc: "정책 적합도와 신청 전 확인자료를 중심으로 정리합니다.",
+    badge: "지원사업 검토용 리포트",
+  },
+];
+
+function audienceLabel(value?: string | null) {
+  return audienceOptions.find((item) => item.value === value)?.badge || "건물주/소유자용 리포트";
+}
 
 const electricQuestions: ChoiceQuestion[] = [
   { key: "vacancy", label: "공실 여부", options: ["공실 없음", "일부 공실", "장기 공실", "리모델링·휴업", "모름"] },
@@ -115,14 +147,16 @@ function hasBuildingId(report: ReportApiResponse) {
 function ReportCard({
   title,
   children,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className={`rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}>
       <h3 className="text-base font-black text-slate-950">{title}</h3>
-      <div className="mt-3 text-sm font-semibold leading-6 text-slate-600">{children}</div>
+      <div className="mt-4 text-sm font-semibold leading-6 text-slate-600">{children}</div>
     </section>
   );
 }
@@ -175,6 +209,9 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
   }
 
   const actions = report?.recommended_actions ?? [];
+  const priorities = report?.priority_actions ?? [];
+  const hypotheses = report?.cause_hypotheses ?? [];
+  const risks = report?.risk_scenarios ?? [];
   const policies = report?.policy_recommendations ?? [];
   return `<!doctype html>
 <html lang="ko">
@@ -183,8 +220,9 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
   <main class="report">
     <header class="cover">
       <p class="eyebrow">${escapeHtml(report?.subtitle || "공공데이터와 유사군 비교 기반 참고용 진단")}</p>
+      <p class="tag">${escapeHtml(audienceLabel(report?.audience))}</p>
       <h1>${escapeHtml(report?.title || "건물 에너지 AI 진단 리포트")}</h1>
-      <p class="summary">${escapeHtml(report?.one_line_summary || "건물 에너지 데이터를 기반으로 참고용 리포트를 생성했습니다.")}</p>
+      <p class="summary">${escapeHtml(report?.executive_summary || report?.one_line_summary || "건물 에너지 데이터를 기반으로 참고용 리포트를 생성했습니다.")}</p>
       <p class="caution">${escapeHtml(report?.overall_assessment?.caution || "본 결과는 참고용이며 법적 효력을 갖지 않습니다.")}</p>
     </header>
 
@@ -215,7 +253,40 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
     )}
 
     ${sectionHtml(
-      "추천 행동 및 설비 개선",
+      "AI 원인 가설",
+      hypotheses.length
+        ? hypotheses
+            .map(
+              (item) => `<article class="item"><h3>${escapeHtml(item.title || "원인 후보")}</h3><p class="tag">신뢰도: ${escapeHtml(item.confidence || "확인 필요")}</p><p>${escapeHtml(item.reason || "")}</p><p class="muted">확인할 것: ${escapeHtml(item.check_next || "")}</p></article>`,
+            )
+            .join("")
+        : '<p class="muted">표시할 원인 가설이 없습니다.</p>',
+    )}
+
+    ${sectionHtml(
+      "개선 우선순위 TOP 3",
+      priorities.length
+        ? priorities
+            .map(
+              (item, index) => `<article class="item"><h3>${escapeHtml(item.rank || index + 1)}. ${escapeHtml(item.title || "우선 실행 항목")}</h3><p class="tag">기대효과 ${escapeHtml(item.impact || "-")} · 난이도 ${escapeHtml(item.difficulty || "-")}</p><p>${escapeHtml(item.reason || "")}</p><p class="muted">다음 행동: ${escapeHtml(item.next_step || "")}</p>${item.related_policy_or_service ? `<p class="tag">${escapeHtml(item.related_policy_or_service)}</p>` : ""}</article>`,
+            )
+            .join("")
+        : '<p class="muted">표시할 우선순위가 없습니다.</p>',
+    )}
+
+    ${sectionHtml(
+      "리스크 시나리오",
+      risks.length
+        ? risks
+            .map(
+              (item) => `<article class="item"><h3>${escapeHtml(item.horizon || "리스크")} · ${escapeHtml(item.title || "")}</h3><p>${escapeHtml(item.description || "")}</p><p class="muted">완화 방안: ${escapeHtml(item.mitigation || "")}</p></article>`,
+            )
+            .join("")
+        : '<p class="muted">표시할 리스크 시나리오가 없습니다.</p>',
+    )}
+
+    ${sectionHtml(
+      "시공·운영 추천",
       actions.length
         ? actions
             .map(
@@ -352,8 +423,11 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
     <section className="ai-report-document rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
       <div className="border-b border-slate-200 pb-6">
         <div className="text-sm font-black text-emerald-600">{report?.subtitle || "공공데이터와 유사군 비교 기반 참고용 진단"}</div>
+        <div className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+          {audienceLabel(report?.audience)}
+        </div>
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{report?.title || "건물 에너지 AI 진단 리포트"}</h2>
-        <p className="mt-3 text-lg font-bold leading-7 text-slate-700">{report?.one_line_summary || "건물 에너지 데이터를 기반으로 참고용 리포트를 생성했습니다."}</p>
+        <p className="mt-3 text-lg font-bold leading-7 text-slate-700">{report?.executive_summary || report?.one_line_summary || "건물 에너지 데이터를 기반으로 참고용 리포트를 생성했습니다."}</p>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -381,8 +455,70 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
         <EnergyReportCard title="가스 핵심 진단" data={report?.energy_summary?.gas} />
       </div>
 
+      <ReportCard title="AI 원인 가설" className="mt-4">
+        <div className="grid gap-3 lg:grid-cols-3">
+          {(report?.cause_hypotheses ?? []).map((item, index) => (
+            <div key={`${item.title}-${index}`} className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-black text-slate-950">{item.title || "원인 후보"}</h4>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-slate-500">신뢰도 {item.confidence || "확인 필요"}</span>
+              </div>
+              <p className="mt-2">{item.reason}</p>
+              <p className="mt-2 text-xs font-bold text-emerald-700">확인할 것: {item.check_next}</p>
+            </div>
+          ))}
+          {(report?.cause_hypotheses ?? []).length === 0 && <p className="text-slate-500">표시할 원인 가설이 없습니다.</p>}
+        </div>
+      </ReportCard>
+
+      <ReportCard title="개선 우선순위 TOP 3" className="mt-4">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] border-separate border-spacing-y-2 text-left text-sm">
+            <thead className="text-xs font-black text-slate-400">
+              <tr>
+                <th className="px-3 py-2">순위</th>
+                <th className="px-3 py-2">실행 항목</th>
+                <th className="px-3 py-2">효과</th>
+                <th className="px-3 py-2">난이도</th>
+                <th className="px-3 py-2">다음 행동</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(report?.priority_actions ?? []).map((item, index) => (
+                <tr key={`${item.title}-${index}`} className="bg-slate-50 align-top">
+                  <td className="rounded-l-2xl px-3 py-3 font-black text-emerald-700">{item.rank || index + 1}</td>
+                  <td className="px-3 py-3">
+                    <div className="font-black text-slate-950">{item.title}</div>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
+                    {item.related_policy_or_service && <p className="mt-2 text-xs font-black text-amber-700">{item.related_policy_or_service}</p>}
+                  </td>
+                  <td className="px-3 py-3 font-bold text-slate-700">{item.impact || "-"}</td>
+                  <td className="px-3 py-3 font-bold text-slate-700">{item.difficulty || "-"}</td>
+                  <td className="rounded-r-2xl px-3 py-3 text-slate-600">{item.next_step}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(report?.priority_actions ?? []).length === 0 && <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">표시할 우선순위가 없습니다.</p>}
+        </div>
+      </ReportCard>
+
+      <ReportCard title="리스크 시나리오" className="mt-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          {(report?.risk_scenarios ?? []).map((item, index) => (
+            <div key={`${item.horizon}-${index}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{item.horizon || "리스크"}</span>
+              <h4 className="mt-3 font-black text-slate-950">{item.title}</h4>
+              <p className="mt-2 text-slate-600">{item.description}</p>
+              <p className="mt-3 text-xs font-bold text-emerald-700">완화 방안: {item.mitigation}</p>
+            </div>
+          ))}
+          {(report?.risk_scenarios ?? []).length === 0 && <p className="text-slate-500">표시할 리스크 시나리오가 없습니다.</p>}
+        </div>
+      </ReportCard>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <ReportCard title="추천 행동 및 시공 분야">
+        <ReportCard title="시공·운영 추천">
           <div className="space-y-3">
             {(report?.recommended_actions ?? []).map((action, index) => (
               <div key={`${action.title}-${index}`} className="rounded-2xl bg-slate-50 p-4">
@@ -455,13 +591,21 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
   );
 }
 
-export function AiReportPanel({ report }: { report: ReportApiResponse; address: string }) {
+export function AiReportPanel({
+  report,
+  defaultOpen = false,
+}: {
+  report: ReportApiResponse;
+  address: string;
+  defaultOpen?: boolean;
+}) {
   const buildingId = hasBuildingId(report);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [step, setStep] = useState<"choice" | "electric" | "gas" | "policy" | "review" | "result">("choice");
   const [electricAnswers, setElectricAnswers] = useState<Record<string, string | string[]>>({});
   const [gasAnswers, setGasAnswers] = useState<Record<string, string | string[]>>({});
   const [policyAnswers, setPolicyAnswers] = useState<Record<string, string | string[]>>({});
+  const [reportAudience, setReportAudience] = useState<AiReportAudience>("building_owner");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AiReportApiResponse | null>(null);
@@ -514,6 +658,7 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
       const payload = await createAiReport({
         building_id: buildingId,
         report_type: withAnswers ? "detailed" : "basic",
+        report_audience: reportAudience,
         user_answers: withAnswers ? answerPayload : undefined,
         signal: controller.signal,
       });
@@ -633,6 +778,32 @@ export function AiReportPanel({ report }: { report: ReportApiResponse; address: 
                   유사군 비교, 등급, 추가 입력 정보를 종합하는 중입니다.
                 </p>
               </div>
+            )}
+
+            {step !== "result" && (
+              <section className="mt-6 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h3 className="text-base font-black text-slate-950">어떤 관점의 리포트가 필요하신가요?</h3>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {audienceOptions.map((option) => {
+                    const selected = reportAudience === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setReportAudience(option.value)}
+                        className={`rounded-2xl border p-4 text-left transition ${
+                          selected
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"
+                        }`}
+                      >
+                        <div className="text-sm font-black">{option.title}</div>
+                        <p className="mt-1 text-xs font-semibold leading-5">{option.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             )}
 
             {step === "choice" && (

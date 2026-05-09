@@ -41,6 +41,7 @@ DEBUG_DUMP_DIR = Path(__file__).resolve().parents[2] / "debug_ai_report_payloads
 class AiReportRequest(BaseModel):
     building_id: Optional[int] = None
     report_type: Optional[str] = "basic"
+    report_audience: Optional[str] = "building_owner"
     user_answers: Optional[Dict[str, Any]] = None
     dry_run: Optional[bool] = False
 
@@ -53,6 +54,7 @@ def _request_key(request: AiReportRequest) -> str:
     key_payload = {
         "building_id": request.building_id,
         "report_type": request.report_type or "basic",
+        "report_audience": request.report_audience or "building_owner",
         "user_answers": request.user_answers or {},
     }
     return hashlib.sha256(_json_string(key_payload).encode("utf-8")).hexdigest()
@@ -111,6 +113,7 @@ def _dump_debug_payload(
         "debug_note": "Local debug payload only. User survey answers may be included. Do not commit this file.",
         "building_id": request.building_id,
         "report_type": request.report_type or "basic",
+        "report_audience": request.report_audience or "building_owner",
         "provider": provider,
         "model": model,
         "output_token_limit": output_token_limit,
@@ -146,7 +149,12 @@ def create_ai_report(request: AiReportRequest, db: Session = Depends(get_db)) ->
     if request.building_id is None:
         raise HTTPException(status_code=400, detail="building_id가 필요합니다.")
 
-    report_context, error = build_ai_report_context(db, request.building_id, request.user_answers)
+    report_context, error = build_ai_report_context(
+        db,
+        request.building_id,
+        request.user_answers,
+        request.report_audience or "building_owner",
+    )
     if error == "not_found" or report_context is None:
         raise HTTPException(status_code=404, detail="해당 건물을 찾을 수 없습니다.")
 
@@ -174,6 +182,7 @@ def create_ai_report(request: AiReportRequest, db: Session = Depends(get_db)) ->
             "dry_run": True,
             "provider": provider,
             "model": model,
+            "report_audience": request.report_audience or "building_owner",
             "context_preview": report_context,
             "context_chars": metrics["context_chars"],
             "prompt_chars": metrics["prompt_chars"],
@@ -281,6 +290,7 @@ def create_ai_report(request: AiReportRequest, db: Session = Depends(get_db)) ->
             "provider": provider,
             "model": model,
             "report_type": request.report_type or "basic",
+            "report_audience": request.report_audience or "building_owner",
             "report_context": report_context,
             "report": parsed_report,
             "raw_text": None if parsed_report else raw_text,

@@ -4,9 +4,11 @@ from typing import Any, Dict, Optional
 
 
 REPORT_JSON_SCHEMA: Dict[str, Any] = {
+    "audience": "building_owner | facility_manager | contractor | policy_reviewer",
     "title": "건물 에너지 AI 진단 리포트",
     "subtitle": "공공데이터와 유사군 비교 기반 참고용 진단",
     "report_mode_label": "실측 기반 진단 | AI 추정 기반 진단 | 데이터 부족 진단",
+    "executive_summary": "선택한 리포트 관점에 맞춘 의사결정 요약",
     "one_line_summary": "한 문장 요약",
     "overall_assessment": {
         "grade_label": "양호 | 보통 | 주의 | 데이터 부족",
@@ -38,6 +40,33 @@ REPORT_JSON_SCHEMA: Dict[str, Any] = {
         "relative_grade": "상대 등급 해석",
         "caution": "공식 등급 또는 법적 인증이 아님",
     },
+    "cause_hypotheses": [
+        {
+            "title": "원인 후보",
+            "confidence": "높음 | 중간 | 낮음 | 낮음~중간",
+            "reason": "근거 데이터와 사용자 입력을 조합한 가설",
+            "check_next": "다음에 확인할 사항",
+        }
+    ],
+    "priority_actions": [
+        {
+            "rank": 1,
+            "title": "우선 실행 항목",
+            "impact": "높음 | 중간 | 낮음 | 중간~높음",
+            "difficulty": "낮음 | 중간 | 높음",
+            "reason": "우선순위 선정 이유",
+            "next_step": "다음 행동",
+            "related_policy_or_service": "관련 정책/서비스 또는 null",
+        }
+    ],
+    "risk_scenarios": [
+        {
+            "horizon": "단기 | 중기 | 정책 대응",
+            "title": "리스크 제목",
+            "description": "현재 상태 유지 시 가능한 리스크",
+            "mitigation": "완화 방안",
+        }
+    ],
     "recommended_actions": [
         {
             "priority": 1,

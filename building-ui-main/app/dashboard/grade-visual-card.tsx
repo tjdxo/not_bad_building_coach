@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { GradeVisual } from "@/lib/grade-visual";
+import { GradeScaleLegend } from "./grade-scale-legend";
 
 export function GradeVisualCard({
   visual,
@@ -10,11 +11,18 @@ export function GradeVisualCard({
 }) {
   const sourceLabel =
     visual.source === "absolute" ? "절대등급 기준" : visual.source === "relative" ? "상대등급 기준" : "등급 정보";
+  const statusMessage = visual.grade
+    ? `이 건물은 ${visual.grade}등급, ${visual.title} 상태로 분석되었습니다.`
+    : "이 건물은 등급 산정 정보가 부족한 상태입니다.";
 
   return (
     <section
-      className={`flex h-full flex-col items-center justify-center rounded-3xl border border-emerald-100 bg-white p-5 text-center shadow-sm ${className}`}
+      className={`relative flex h-full flex-col items-center justify-center rounded-3xl border border-emerald-100 bg-white p-5 text-center shadow-sm ${className}`}
     >
+      <div className="mb-4 w-full">
+        <GradeScaleLegend currentGrade={visual.grade} />
+      </div>
+
       {visual.imageSrc ? (
         <div className="relative h-28 w-28 sm:h-32 sm:w-32 lg:h-36 lg:w-36">
           <Image
@@ -41,7 +49,8 @@ export function GradeVisualCard({
         <span className="text-base font-black text-slate-950">{visual.title}</span>
       </div>
       <div className="mt-2 text-xs font-black text-emerald-700">{visual.basisLabel || sourceLabel}</div>
-      <p className="mt-2 max-w-[16rem] text-xs font-semibold leading-5 text-slate-500">{visual.description}</p>
+      <p className="mt-3 max-w-[22rem] text-sm font-black leading-6 text-slate-950">{statusMessage}</p>
+      <p className="mt-2 max-w-[20rem] text-xs font-semibold leading-5 text-slate-500">{visual.description}</p>
     </section>
   );
 }

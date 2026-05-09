@@ -17,13 +17,13 @@ import {
   type EnergyAiLiteDiagnosis,
   type EnergyUsageMonthlyPoint,
   type PeerBenchmark,
-  type PeerMetric,
   type ReportApiResponse,
   type SavingEstimate,
   type SavingEstimateEnergy,
 } from "@/lib/building-api";
 import { getGradeVisual } from "@/lib/grade-visual";
 import { AiReportPanel } from "./ai-report-panel";
+import { DetailAnalysisGate } from "./detail-analysis-gate";
 import { GradeVisualCard } from "./grade-visual-card";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
 
@@ -183,33 +183,37 @@ function BarChart({
   }
 
   return (
-    <div className="mt-8 w-full min-w-0 overflow-x-hidden">
-      <div className="flex h-48 w-full min-w-0 items-end gap-1 sm:gap-2">
-        {data.map((item) => {
+    <div className="mt-8 w-full min-w-0 overflow-visible pt-14">
+      <div className="flex h-48 w-full min-w-0 items-end gap-1 overflow-visible sm:gap-2">
+        {data.map((item, index) => {
           const value = item.value ?? 0;
           const avg = item.avg ?? 0;
           const valueLabel = formatChartValue(item.value, unit);
           const avgLabel = formatChartValue(item.avg, unit);
+          const tooltipPosition =
+            index === 0
+              ? "left-0 translate-x-0"
+              : index === data.length - 1
+                ? "right-0 translate-x-0"
+                : "left-1/2 -translate-x-1/2";
 
           return (
-            <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-              <div className="flex w-full items-end justify-center gap-1">
+            <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2 overflow-visible">
+              <div className="flex w-full items-end justify-center gap-1 overflow-visible">
                 {hasPeerData && (
                   <div
                     className={`w-2 rounded-t ${item.avg === null ? "bg-transparent" : "bg-slate-200"}`}
                     style={{ height: `${(avg / maxValue) * 160}px` }}
-                    title={`${item.tooltipMonth}\n유사 건물 평균: ${avgLabel}`}
                   />
                 )}
-                <div className="group relative flex items-end justify-center">
+                <div className="group relative flex items-end justify-center overflow-visible">
                   <div
                     className={`w-3 rounded-t ${colorClass}`}
                     style={{ height: `${(value / maxValue) * 160}px` }}
-                    title={`${item.tooltipMonth}\n대상 건물: ${valueLabel}${
-                      item.isEstimated ? " (추정)" : ""
-                    }${item.avg !== null ? `\n유사 건물 평균: ${avgLabel}` : ""}`}
                   />
-                  <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 hidden w-44 -translate-x-1/2 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-xl group-hover:block">
+                  <div
+                    className={`pointer-events-none absolute bottom-full z-50 mb-3 hidden w-48 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-2xl ring-1 ring-white/10 group-hover:block ${tooltipPosition}`}
+                  >
                     <div className="font-black">{item.tooltipMonth}</div>
                     <div>
                       대상 건물: {valueLabel}
@@ -299,6 +303,10 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
   const hasSaving = estimate.available && totalSaving > 0;
   const electricitySaving = estimate.electricity?.saving_krw ?? 0;
   const gasSaving = estimate.gas?.saving_krw ?? 0;
+  const noSavingMessage = estimate.available
+    ? "이미 유사군 상위 10% 기준 이내 수준입니다."
+    : estimate.reason || "예상 절약액을 산정하기 위한 비교 데이터가 부족합니다.";
+  const formatEnergySavingValue = (value: number) => (value > 0 ? formatApproxKrw(value) : "상위권 기준 이하");
 
   return (
     <section className="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 shadow-sm">
@@ -311,13 +319,13 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
           <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
             {hasSaving
               ? "유사군 상위권 수준까지 줄였을 때의 연간 에너지 비용 절감 여지입니다."
-              : estimate.reason || "현재 기준 대비 추가 절감 여지가 크지 않습니다."}
+              : noSavingMessage}
           </p>
         </div>
         <div className="rounded-3xl bg-white px-6 py-5 text-right shadow-sm ring-1 ring-emerald-100">
-          <div className="text-xs font-black text-slate-400">연간 예상 절약액</div>
-          <div className="mt-2 text-3xl font-black text-emerald-700">
-            {hasSaving ? formatApproxKrw(totalSaving) : "0원"}
+          <div className="text-xs font-black text-slate-400">{hasSaving ? "연간 예상 절약액" : "현재 절감 상태"}</div>
+          <div className={`mt-2 font-black text-emerald-700 ${hasSaving ? "text-3xl" : "text-xl leading-7"}`}>
+            {hasSaving ? formatApproxKrw(totalSaving) : "상위 10% 이내"}
           </div>
         </div>
       </div>
@@ -326,7 +334,7 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
         <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-black text-slate-950">전기</div>
-            <div className="text-lg font-black text-slate-950">{formatApproxKrw(electricitySaving)}</div>
+            <div className="text-lg font-black text-slate-950">{formatEnergySavingValue(electricitySaving)}</div>
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             절감 가능량 {formatSavingUsage(estimate.electricity)} · 단가{" "}
@@ -336,7 +344,7 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
         <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-black text-slate-950">가스</div>
-            <div className="text-lg font-black text-slate-950">{formatApproxKrw(gasSaving)}</div>
+            <div className="text-lg font-black text-slate-950">{formatEnergySavingValue(gasSaving)}</div>
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             절감 가능량 {formatSavingUsage(estimate.gas)} · 단가{" "}
@@ -355,49 +363,6 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
 
 function isDisplayNumber(value?: number | null): value is number {
   return value !== null && value !== undefined && Number.isFinite(value);
-}
-
-function formatSignedPercent(value?: number | null) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return null;
-  }
-
-  return `${value > 0 ? "+" : ""}${formatNumber(value, 1)}%`;
-}
-
-function metricStatusLabel(metric?: PeerMetric | null) {
-  if (metric?.status_label) {
-    return metric.status_label;
-  }
-
-  const diff = metric?.vs_peer_pct;
-  if (diff === null || diff === undefined) {
-    return "산정 불가";
-  }
-  if (diff >= 20) {
-    return "높음";
-  }
-  if (diff <= -20) {
-    return "낮음";
-  }
-  return "평균권";
-}
-
-function metricDescription(metric?: PeerMetric | null) {
-  if (!metric) {
-    return "유사군 데이터 없음";
-  }
-
-  const parts = [];
-  const vsPeerPct = formatSignedPercent(metric.vs_peer_pct);
-  if (vsPeerPct) {
-    parts.push(`유사군 평균 대비 ${vsPeerPct}`);
-  }
-  if (metric.percentile !== null && metric.percentile !== undefined) {
-    parts.push(`상위 ${formatNumber(metric.percentile, 1)}% 사용량`);
-  }
-
-  return parts.length > 0 ? parts.join(" · ") : "산정 불가";
 }
 
 function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
@@ -456,25 +421,13 @@ function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
     desc:
       relativeGrade.source === "appendix1_proxy_grade_by_current_peer_percentile"
         ? "현재 유사군 분포 기준 보정"
-        : "서울시 건물 분포 기준",
-  };
-}
-
-function rankSummary(peerBenchmark?: PeerBenchmark | null) {
-  if (!peerBenchmark?.has_data || !peerBenchmark.peer_rank_label) {
-    return { value: "산정 불가", desc: "유사군 순위 산정 불가" };
-  }
-
-  return {
-    value: peerBenchmark.peer_rank_label,
-    desc: "총 에너지 원단위 기준",
+        : "서울시 내 유사 건물군 분포 기준",
   };
 }
 
 function buildSummaryCards(peerBenchmark?: PeerBenchmark | null, currentCarbonEmissionTons?: number): SummaryCard[] {
   const absoluteGrade = absoluteGradeSummary(peerBenchmark);
   const relativeGrade = relativeGradeSummary(peerBenchmark);
-  const rank = rankSummary(peerBenchmark);
   const carbonCard: SummaryCard = {
     label: "온실가스 배출량",
     value:
@@ -489,17 +442,6 @@ function buildSummaryCards(peerBenchmark?: PeerBenchmark | null, currentCarbonEm
     { label: "절대 등급", value: absoluteGrade.value, desc: absoluteGrade.desc },
     { label: "상대 등급", value: relativeGrade.value, desc: relativeGrade.desc },
     carbonCard,
-    {
-      label: "전기",
-      value: metricStatusLabel(peerBenchmark?.electricity),
-      desc: metricDescription(peerBenchmark?.electricity),
-    },
-    {
-      label: "가스",
-      value: metricStatusLabel(peerBenchmark?.gas),
-      desc: metricDescription(peerBenchmark?.gas),
-    },
-    { label: "유사군 순위", value: rank.value, desc: rank.desc },
     {
       label: "신뢰도",
       value: peerBenchmark?.has_data ? peerBenchmark.reliability_label || "산정 불가" : "산정 불가",
@@ -538,7 +480,7 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     value: relativeGradeSummary(peerBenchmark).value,
     lines: [
       relativeGradeSummary(peerBenchmark).desc,
-      "대상 건물이 서울시 건물 데이터 및 유사군 분포 안에서 어느 정도 위치에 있는지 보여주는 참고 지표입니다.",
+      "서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
       relativeGrade?.absolute_relative_grade_match === false ? "절대 등급과 상대 등급이 다릅니다." : "",
     ].filter((line): line is string => Boolean(line)),
   });
@@ -548,7 +490,7 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     value: "참고용",
     lines: [
       "절대 등급: 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.",
-      "상대 등급: 서울시 건물 데이터 및 유사 건물군 내 에너지 사용량 분포를 기반으로 산정한 상대 비교 결과입니다.",
+      "상대 등급: 서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
       "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
       "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost/XGBoost 기반 AI 모델과 유사건물 baseline을 활용해 참고용 사용량을 추정합니다.",
       "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
@@ -556,6 +498,33 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
   });
 
   return details;
+}
+
+function AnalysisCriteriaAccordion({ details }: { details: ReturnType<typeof buildBenchmarkDetails> }) {
+  return (
+    <details className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <summary className="cursor-pointer list-none text-lg font-black text-slate-950">
+        분석 기준 보기
+        <span className="ml-2 text-sm font-bold text-slate-400">∨</span>
+      </summary>
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        {details.map((detail) => (
+          <section key={detail.title} className="rounded-2xl bg-slate-50 p-5">
+            <div className="text-xs font-black text-slate-400">{detail.title}</div>
+            <div className="mt-2 text-2xl font-black text-slate-950">{detail.value}</div>
+            <div className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-600">
+              {detail.lines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <p className="mt-4 text-xs font-semibold leading-5 text-slate-400">
+        본 제공 데이터는 공공데이터 기반의 추정·분석 결과이며 법적 효력을 가지지 않습니다. 단순 참고용으로만 활용해 주세요.
+      </p>
+    </details>
+  );
 }
 
 function aiMainValue(diagnosis?: EnergyAiLiteDiagnosis | null) {
@@ -672,9 +641,11 @@ function AiEnergyCard({
 function AiEstimatedDashboard({
   report,
   address,
+  defaultOpenAiReport = false,
 }: {
   report: ReportApiResponse;
   address: string;
+  defaultOpenAiReport?: boolean;
 }) {
   const building = report.building;
   const aiDiagnosis = report.ai_diagnosis;
@@ -758,7 +729,7 @@ function AiEstimatedDashboard({
                 AI 추정값, baseline, 서비스 기준값, 유사군 정보를 종합해 참고용 리포트를 생성합니다.
               </p>
             </div>
-            <AiReportPanel report={report} address={address} />
+            <AiReportPanel report={report} address={address} defaultOpen={defaultOpenAiReport} />
           </div>
         </div>
 
@@ -839,6 +810,7 @@ export default async function DashboardPage({
     grs_ar?: string;
     agnd_flr?: string;
     energy_mode?: string;
+    open_ai_report?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -919,13 +891,14 @@ export default async function DashboardPage({
   }
 
   const building = report.building;
+  const shouldOpenAiReport = params.open_ai_report === "1" || params.open_ai_report === "true";
   const manualEnergyHref = `/search/manual-energy?${new URLSearchParams({
     address: building.display_address || building.road_address || address,
     building_id: String(building.building_id ?? building.id ?? ""),
   }).toString()}`;
 
   if (report.report_mode === "estimated") {
-    return <AiEstimatedDashboard report={report} address={address} />;
+    return <AiEstimatedDashboard report={report} address={address} defaultOpenAiReport={shouldOpenAiReport} />;
   }
 
   if (report.status === "energy_data_missing" || report.energy?.source === "none") {
@@ -1020,12 +993,11 @@ export default async function DashboardPage({
       report.peer_benchmark?.relative_grade?.relative_grade_by_seoul_percentile ||
       report.peer_benchmark?.relative_grade?.appendix1_proxy_grade_by_current_peer_percentile,
   });
-
   return (
     <main className="min-h-screen pb-16">
       <section className="border-b border-slate-200 bg-white py-10">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between">
+          <div className="space-y-8">
             <div>
               <p className="text-sm font-black tracking-[0.25em] text-emerald-600">진단 대시보드</p>
               <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">{building.name}</h1>
@@ -1045,16 +1017,16 @@ export default async function DashboardPage({
                 )}
               </div>
             </div>
-            <div className="grid w-full gap-4 lg:max-w-4xl lg:grid-cols-[220px_1fr] lg:items-stretch">
-              <GradeVisualCard visual={gradeVisual} />
+            <div className="w-full space-y-5">
+              <GradeVisualCard visual={gradeVisual} className="mx-auto w-full max-w-3xl" />
               <div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {summaryCards.map((card) => (
-                    <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
-                      <div className="text-xs font-black text-slate-400">{card.label}</div>
-                      <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
+                    <div key={card.label} title={card.title} className="min-w-0 rounded-2xl bg-slate-50 p-4 text-center">
+                      <div className="text-xs font-black leading-4 text-slate-400">{card.label}</div>
+                      <div className="mt-2 break-keep text-2xl font-black leading-tight text-slate-950">{card.value}</div>
                       {card.desc && (
-                        <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
+                        <div className="mt-2 break-keep text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
                       )}
                     </div>
                   ))}
@@ -1070,6 +1042,10 @@ export default async function DashboardPage({
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-10">
+        <AnalysisCriteriaAccordion details={benchmarkDetails} />
+
+        <div className="mt-8">
+        <DetailAnalysisGate report={report}>
         <div className="grid grid-cols-1 gap-8">
           <SavingEstimateCard estimate={report.saving_estimate} />
 
@@ -1115,28 +1091,11 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          {benchmarkDetails.map((detail) => (
-            <section key={detail.title} className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
-              <div className="text-sm font-black text-slate-400">{detail.title}</div>
-              <div className="mt-2 text-3xl font-black text-slate-950">{detail.value}</div>
-              <div className="mt-4 space-y-2 text-sm font-semibold leading-6 text-slate-600">
-                {detail.lines.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-        <p className="mt-4 text-xs font-semibold leading-5 text-slate-400">
-          ※ 본 제공 데이터는 공공데이터 기반의 추정·분석 결과이며 법적 효력을 가지지 않습니다. 단순 참고용으로만 활용해 주세요.
-        </p>
-
         <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
-              <AiReportPanel report={report} address={address} />
+              <AiReportPanel report={report} address={address} defaultOpen={shouldOpenAiReport} />
             </div>
             <div className="mt-6 space-y-4">
               {actions.map((action) => (
@@ -1172,6 +1131,8 @@ export default async function DashboardPage({
               유사 건물 상세 비교
             </Link>
           </aside>
+        </div>
+        </DetailAnalysisGate>
         </div>
       </section>
     </main>

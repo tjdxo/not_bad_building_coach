@@ -230,10 +230,14 @@ export type AiReportUserAnswers = {
   policy?: Record<string, string | string[]>;
 };
 
+export type AiReportAudience = "building_owner" | "facility_manager" | "contractor" | "policy_reviewer";
+
 export type AiGeneratedReport = {
+  audience?: AiReportAudience | string;
   title?: string;
   subtitle?: string;
   report_mode_label?: string;
+  executive_summary?: string;
   one_line_summary?: string;
   overall_assessment?: {
     grade_label?: string;
@@ -265,6 +269,27 @@ export type AiGeneratedReport = {
     relative_grade?: string;
     caution?: string;
   };
+  cause_hypotheses?: Array<{
+    title?: string;
+    confidence?: string;
+    reason?: string;
+    check_next?: string;
+  }>;
+  priority_actions?: Array<{
+    rank?: number;
+    title?: string;
+    impact?: string;
+    difficulty?: string;
+    reason?: string;
+    next_step?: string;
+    related_policy_or_service?: string | null;
+  }>;
+  risk_scenarios?: Array<{
+    horizon?: string;
+    title?: string;
+    description?: string;
+    mitigation?: string;
+  }>;
   recommended_actions?: Array<{
     priority?: number;
     title?: string;
@@ -377,7 +402,8 @@ export function dashboardHrefForReportBuilding(building: ApiBuilding, fallbackAd
 }
 
 export function reportHref(address: string) {
-  return `/report?address=${encodeURIComponent(address)}`;
+  const params = new URLSearchParams({ address, open_ai_report: "1" });
+  return `/dashboard?${params.toString()}`;
 }
 
 export function compareHref(address: string) {
@@ -386,7 +412,9 @@ export function compareHref(address: string) {
 
 export function reportHrefForReportBuilding(building: ApiBuilding, fallbackAddress = "") {
   const address = building.display_address || building.road_address || fallbackAddress;
-  return `/report?${buildingRouteQuery({ ...building, address }).toString()}`;
+  const params = buildingRouteQuery({ ...building, address });
+  params.set("open_ai_report", "1");
+  return `/dashboard?${params.toString()}`;
 }
 
 export function compareHrefForReportBuilding(building: ApiBuilding, fallbackAddress = "") {
@@ -396,7 +424,9 @@ export function compareHrefForReportBuilding(building: ApiBuilding, fallbackAddr
 
 export function reportHrefForSearchBuilding(building: BuildingSearchItem) {
   const address = building.display_address || building.road_address || building.plat_plc || "";
-  return `/report?${buildingRouteQuery({ ...building, address }).toString()}`;
+  const params = buildingRouteQuery({ ...building, address });
+  params.set("open_ai_report", "1");
+  return `/dashboard?${params.toString()}`;
 }
 
 export type BuildingSearchParams = {
@@ -550,6 +580,7 @@ export async function fetchReportForParams(params: {
 export async function createAiReport(params: {
   building_id: string | number;
   report_type?: "basic" | "detailed";
+  report_audience?: AiReportAudience;
   user_answers?: AiReportUserAnswers;
   signal?: AbortSignal;
 }) {
@@ -561,6 +592,7 @@ export async function createAiReport(params: {
     body: JSON.stringify({
       building_id: Number(params.building_id),
       report_type: params.report_type ?? "basic",
+      report_audience: params.report_audience ?? "building_owner",
       user_answers: params.user_answers,
     }),
     signal: params.signal,

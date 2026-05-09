@@ -207,6 +207,7 @@ def build_ai_report_context(
     db: Session,
     building_id: Any,
     user_answers: Optional[Dict[str, Any]] = None,
+    report_audience: str = "building_owner",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     building = crud.get_building_master_by_id(db, building_id)
     if not building:
@@ -243,6 +244,7 @@ def build_ai_report_context(
             "is_district_heating": safe_bool(building.get("is_district_heating")),
         },
         "report_mode": report_mode,
+        "report_audience": report_audience,
         "energy": energy_context,
         "peer_benchmark": build_peer_context(peer_row),
         "grades": build_grade_context(peer_row),

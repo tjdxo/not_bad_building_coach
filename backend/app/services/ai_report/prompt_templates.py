@@ -29,13 +29,24 @@ recommended_actions는 최대 4개만 작성한다.
 policy_recommendations는 report_context.policy_matches에 있는 항목 중 최대 3개만 작성한다.
 각 정책의 matched_reasons와 missing_checks는 최대 2개씩만 작성한다.
 각 설명 문장은 1~2문장으로 제한한다.
+report_context.report_audience 값에 따라 리포트 관점을 바꾼다.
+building_owner: 비용 절감, 예상 절약액, 지원사업, 쉬운 설명, 가장 먼저 할 행동 중심.
+facility_manager: 월별 사용 패턴, 운영 점검, 설비 관리, 피크 원인, 체크리스트 중심.
+contractor: 현장 점검 포인트, 개선 공사 후보, 상담 시 확인할 항목, 정책 연계 가능 공사 항목 중심. 실제 업체명, 전화번호, 견적 금액은 만들지 않는다.
+policy_reviewer: 정책 적합도, 충족 조건, 추가 확인 필요 조건, 신청 전 준비자료, 공식 공고 확인 필요성 중심. 합격률, 선정 가능, 승인 가능처럼 단정하지 않는다.
+AI 리포트는 대시보드 숫자를 반복하지 말고 원인 가설, 우선순위, 리스크, 다음 행동으로 해석한다.
+cause_hypotheses는 최대 3개만 작성하고 확정 표현 대신 가능성, 확인 필요, 해석 주의 표현을 사용한다.
+priority_actions는 정확히 최대 3개까지 작성하고 데이터 신뢰도, 절감 가능성, 실행 난이도, 비용 부담, 정책 연계 가능성, 사용자 입력 관련성을 함께 고려한다.
+risk_scenarios는 최대 3개만 작성하고 단기, 중기, 정책 대응 관점을 우선 사용한다.
 반드시 JSON 객체 하나만 출력한다.
 """.strip()
 
 
 def build_ai_report_prompt_parts(report_context: Dict[str, Any]) -> Dict[str, str]:
+    audience = report_context.get("report_audience") or "building_owner"
     user_prompt = "\n\n".join(
         [
+            "report_audience={0} 관점으로 작성하라.".format(audience),
             "아래 JSON 스키마와 같은 필드 구조로 응답하라.",
             json.dumps(REPORT_JSON_SCHEMA, ensure_ascii=False, indent=2),
             "아래 report_context만 근거로 리포트를 작성하라.",
