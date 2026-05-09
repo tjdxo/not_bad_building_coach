@@ -162,6 +162,35 @@ export type AiDiagnosis = {
   gas?: EnergyAiLiteDiagnosis | null;
 };
 
+export type SavingEstimateEnergy = {
+  available?: boolean;
+  unit?: "kWh" | "m3" | string;
+  benchmark_type?: string | null;
+  my_annual_usage?: number | null;
+  peer_mean_annual_usage?: number | null;
+  peer_best_annual_usage?: number | null;
+  target_annual_usage?: number | null;
+  saving_usage?: number | null;
+  saving_krw?: number | null;
+};
+
+export type SavingEstimate = {
+  available: boolean;
+  title?: string | null;
+  benchmark_type?: string | null;
+  reason?: string | null;
+  unit_price?: {
+    electricity_krw_per_kwh?: number | null;
+    gas_krw_per_m3?: number | null;
+  } | null;
+  electricity?: SavingEstimateEnergy | null;
+  gas?: SavingEstimateEnergy | null;
+  total?: {
+    saving_krw?: number | null;
+  } | null;
+  caution?: string | null;
+};
+
 export type ReportApiResponse = {
   status?: "ok" | "energy_data_missing";
   report_mode?: "measured" | "estimated" | "mixed" | "no_data";
@@ -192,6 +221,7 @@ export type ReportApiResponse = {
   report_text: string;
   raw_analysis_json: Record<string, unknown>;
   ai_diagnosis?: AiDiagnosis | null;
+  saving_estimate?: SavingEstimate | null;
 };
 
 export type AiReportUserAnswers = {
@@ -621,6 +651,25 @@ export function formatRatioGap(ratio: number) {
   return `${diff > 0 ? "+" : ""}${diff}%`;
 }
 
+export const CARBON_EMISSION_FACTORS_GCO2 = {
+  electricityKwh: 424,
+  waterM3: 332,
+  gasM3: 2240,
+} as const;
+
+export function estimateCurrentCarbonEmission(report: ReportApiResponse) {
+  const electricityTons =
+    Math.max(0, report.energy_summary.target_avg_electricity_kwh || 0) *
+    12 *
+    (CARBON_EMISSION_FACTORS_GCO2.electricityKwh / 1_000_000);
+  const gasTons =
+    Math.max(0, report.energy_summary.target_avg_gas_m3 || 0) *
+    12 *
+    (CARBON_EMISSION_FACTORS_GCO2.gasM3 / 1_000_000);
+
+  return electricityTons + gasTons;
+}
+
 export function estimateCarbonSaving(report: ReportApiResponse) {
   const monthlyElectricityExcess = Math.max(
     0,
@@ -632,10 +681,11 @@ export function estimateCarbonSaving(report: ReportApiResponse) {
     report.energy_summary.target_avg_gas_m3 - report.energy_summary.peer_avg_gas_m3,
   );
 
-  const electricityTons = monthlyElectricityExcess * 12 * 0.000459;
-  const gasTons = monthlyGasExcess * 12 * 0.00223;
+  const electricityTons =
+    monthlyElectricityExcess * 12 * (CARBON_EMISSION_FACTORS_GCO2.electricityKwh / 1_000_000);
+  const gasTons = monthlyGasExcess * 12 * (CARBON_EMISSION_FACTORS_GCO2.gasM3 / 1_000_000);
 
-  return Math.max(0.1, electricityTons + gasTons);
+  return electricityTons + gasTons;
 }
 
 function latestTwelve<T>(items: T[]) {

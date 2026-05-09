@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.services.ai_report.policy_candidates import CONTRACTOR_CATEGORIES
 from app.services.ai_report.policy_matcher import match_policies
+from app.services.saving_estimate import build_saving_estimate
 
 
 def safe_float(value: Any) -> Optional[float]:
@@ -217,6 +218,14 @@ def build_ai_report_context(
     gas_row = crud.get_gas_energy_service_lite_for_building(db, building_id)
     ai_estimate = build_ai_estimate(electric_row, gas_row)
     report_mode = report_mode_from_data(usage_rows, ai_estimate)
+    energy_context = measured_energy_summary(usage_rows)
+    saving_estimate = build_saving_estimate(
+        db,
+        usage_rows,
+        peer_row,
+        energy_context.get("period_start"),
+        energy_context.get("period_end"),
+    )
 
     context = {
         "building": {
@@ -234,10 +243,11 @@ def build_ai_report_context(
             "is_district_heating": safe_bool(building.get("is_district_heating")),
         },
         "report_mode": report_mode,
-        "energy": measured_energy_summary(usage_rows),
+        "energy": energy_context,
         "peer_benchmark": build_peer_context(peer_row),
         "grades": build_grade_context(peer_row),
         "ai_estimate": ai_estimate,
+        "saving_estimate": saving_estimate,
         "user_answers": user_answers or {},
         "contractor_categories": CONTRACTOR_CATEGORIES,
         "report_rules": {

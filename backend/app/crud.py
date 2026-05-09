@@ -330,6 +330,35 @@ def get_energy_usage_for_master_building(db: Session, building_id: Any) -> List[
     return [dict(row) for row in db.execute(statement, {"building_id": building_id}).mappings().all()]
 
 
+def get_energy_usage_sum_for_period(
+    db: Session,
+    building_id: Any,
+    period_start: Optional[str],
+    period_end: Optional[str],
+) -> Dict[str, Optional[float]]:
+    if not building_id or not period_start or not period_end:
+        return {"elec_qty": None, "gas_qty": None}
+
+    statement = text("""
+        SELECT
+          SUM(elec_qty) AS elec_qty,
+          SUM(gas_qty) AS gas_qty
+        FROM energy_usage
+        WHERE building_id = :building_id
+          AND use_ym >= :period_start
+          AND use_ym <= :period_end
+    """)
+    row = db.execute(
+        statement,
+        {
+            "building_id": building_id,
+            "period_start": period_start,
+            "period_end": period_end,
+        },
+    ).mappings().first()
+    return dict(row) if row else {"elec_qty": None, "gas_qty": None}
+
+
 def get_peer_benchmark_for_master_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
     statement = text("""
         SELECT *

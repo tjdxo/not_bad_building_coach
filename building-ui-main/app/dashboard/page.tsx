@@ -2,6 +2,8 @@ import Link from "next/link";
 import {
   compareHrefForReportBuilding,
   dashboardHref,
+  estimateCurrentCarbonEmission,
+  CARBON_EMISSION_FACTORS_GCO2,
   fetchReport,
   fetchReportForParams,
   formatArea,
@@ -17,6 +19,8 @@ import {
   type PeerBenchmark,
   type PeerMetric,
   type ReportApiResponse,
+  type SavingEstimate,
+  type SavingEstimateEnergy,
 } from "@/lib/building-api";
 import { getGradeVisual } from "@/lib/grade-visual";
 import { AiReportPanel } from "./ai-report-panel";
@@ -244,6 +248,111 @@ type SummaryCard = {
   title?: string;
 };
 
+function formatKrw(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) {
+    return "0원";
+  }
+  return `${new Intl.NumberFormat("ko-KR").format(Math.round(value))}원`;
+}
+
+function formatApproxKrw(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) {
+    return "0원";
+  }
+  const rounded = Math.round(value);
+  if (rounded >= 100_000_000) {
+    const eok = rounded / 100_000_000;
+    return `약 ${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: eok >= 10 ? 0 : 1 }).format(eok)}억 원`;
+  }
+  if (rounded >= 10_000) {
+    return `약 ${new Intl.NumberFormat("ko-KR").format(Math.round(rounded / 10_000))}만 원`;
+  }
+  return `약 ${new Intl.NumberFormat("ko-KR").format(rounded)}원`;
+}
+
+function savingBenchmarkLabel(type?: string | null) {
+  if (type === "peer_top10_exact") {
+    return "유사군 상위 10% 실제 기준";
+  }
+  if (type === "estimated_from_best_and_mean") {
+    return "유사군 우수건물 기반 상위 10% 근사 기준";
+  }
+  if (type === "estimated_from_peer_mean") {
+    return "유사군 평균 기반 상위권 근사 기준";
+  }
+  return "산정 기준 부족";
+}
+
+function formatSavingUsage(item?: SavingEstimateEnergy | null) {
+  if (!item?.available || !isDisplayNumber(item.saving_usage)) {
+    return "산정 불가";
+  }
+  return `${formatNumber(item.saving_usage, 0)} ${item.unit === "m3" ? "m³" : item.unit || ""}`;
+}
+
+function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) {
+  if (!estimate) {
+    return null;
+  }
+
+  const totalSaving = estimate.total?.saving_krw ?? 0;
+  const hasSaving = estimate.available && totalSaving > 0;
+  const electricitySaving = estimate.electricity?.saving_krw ?? 0;
+  const gasSaving = estimate.gas?.saving_krw ?? 0;
+
+  return (
+    <section className="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 shadow-sm">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-black tracking-[0.18em] text-emerald-700">SAVING ESTIMATE</p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            {estimate.title || "유사군 상위 10% 기준 예상 절약액"}
+          </h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
+            {hasSaving
+              ? "유사군 상위권 수준까지 줄였을 때의 연간 에너지 비용 절감 여지입니다."
+              : estimate.reason || "현재 기준 대비 추가 절감 여지가 크지 않습니다."}
+          </p>
+        </div>
+        <div className="rounded-3xl bg-white px-6 py-5 text-right shadow-sm ring-1 ring-emerald-100">
+          <div className="text-xs font-black text-slate-400">연간 예상 절약액</div>
+          <div className="mt-2 text-3xl font-black text-emerald-700">
+            {hasSaving ? formatApproxKrw(totalSaving) : "0원"}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-black text-slate-950">전기</div>
+            <div className="text-lg font-black text-slate-950">{formatApproxKrw(electricitySaving)}</div>
+          </div>
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            절감 가능량 {formatSavingUsage(estimate.electricity)} · 단가{" "}
+            {formatKrw(estimate.unit_price?.electricity_krw_per_kwh)}/kWh
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-black text-slate-950">가스</div>
+            <div className="text-lg font-black text-slate-950">{formatApproxKrw(gasSaving)}</div>
+          </div>
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            절감 가능량 {formatSavingUsage(estimate.gas)} · 단가{" "}
+            {formatKrw(estimate.unit_price?.gas_krw_per_m3)}/m³
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-1 text-xs font-semibold leading-5 text-slate-500">
+        <p>기준: {savingBenchmarkLabel(estimate.benchmark_type)}</p>
+        <p>{estimate.caution || "실제 고지서 금액이 아닌 참고용 추정액입니다."}</p>
+      </div>
+    </section>
+  );
+}
+
 function isDisplayNumber(value?: number | null): value is number {
   return value !== null && value !== undefined && Number.isFinite(value);
 }
@@ -362,14 +471,24 @@ function rankSummary(peerBenchmark?: PeerBenchmark | null) {
   };
 }
 
-function buildSummaryCards(peerBenchmark?: PeerBenchmark | null): SummaryCard[] {
+function buildSummaryCards(peerBenchmark?: PeerBenchmark | null, currentCarbonEmissionTons?: number): SummaryCard[] {
   const absoluteGrade = absoluteGradeSummary(peerBenchmark);
   const relativeGrade = relativeGradeSummary(peerBenchmark);
   const rank = rankSummary(peerBenchmark);
+  const carbonCard: SummaryCard = {
+    label: "온실가스 배출량",
+    value:
+      currentCarbonEmissionTons !== null && currentCarbonEmissionTons !== undefined
+        ? `${formatNumber(currentCarbonEmissionTons, 1)}tCO₂`
+        : "산정 불가",
+    desc: "현재 사용량 연간 환산",
+    title: `온실가스 배출량 = 에너지 사용량 × 탄소배출계수. 전기 1kWh=${CARBON_EMISSION_FACTORS_GCO2.electricityKwh}gCO₂, 수도 1㎥=${CARBON_EMISSION_FACTORS_GCO2.waterM3}gCO₂, 가스 1㎥=${CARBON_EMISSION_FACTORS_GCO2.gasM3}gCO₂`,
+  };
 
   return [
     { label: "절대 등급", value: absoluteGrade.value, desc: absoluteGrade.desc },
     { label: "상대 등급", value: relativeGrade.value, desc: relativeGrade.desc },
+    carbonCard,
     {
       label: "전기",
       value: metricStatusLabel(peerBenchmark?.electricity),
@@ -625,6 +744,10 @@ function AiEstimatedDashboard({
           <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
         </div>
 
+        </div>
+
+        <div className="mt-8">
+          <SavingEstimateCard estimate={report.saving_estimate} />
         </div>
 
         <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
@@ -883,7 +1006,8 @@ export default async function DashboardPage({
     buildingDescriptor,
     formatArea(building.gross_floor_area),
   ].filter(Boolean);
-  const summaryCards = buildSummaryCards(report.peer_benchmark);
+  const currentCarbonEmissionTons = estimateCurrentCarbonEmission(report);
+  const summaryCards = buildSummaryCards(report.peer_benchmark, currentCarbonEmissionTons);
   const benchmarkDetails = buildBenchmarkDetails(report.peer_benchmark);
   const peerBenchmarkMissing = !report.peer_benchmark?.has_data;
   const gradeVisual = getGradeVisual({
@@ -923,16 +1047,22 @@ export default async function DashboardPage({
             </div>
             <div className="grid w-full gap-4 lg:max-w-4xl lg:grid-cols-[220px_1fr] lg:items-stretch">
               <GradeVisualCard visual={gradeVisual} />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-                {summaryCards.map((card) => (
-                  <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
-                    <div className="text-xs font-black text-slate-400">{card.label}</div>
-                    <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
-                    {card.desc && (
-                      <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
-                    )}
-                  </div>
-                ))}
+              <div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                  {summaryCards.map((card) => (
+                    <div key={card.label} title={card.title} className="rounded-2xl bg-slate-50 p-4 text-center">
+                      <div className="text-xs font-black text-slate-400">{card.label}</div>
+                      <div className="mt-2 text-2xl font-black text-slate-950">{card.value}</div>
+                      {card.desc && (
+                        <div className="mt-2 text-[11px] font-bold leading-4 text-slate-400">{card.desc}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">
+                  ※ 온실가스 배출량 = 현재 에너지 사용량 × 탄소배출계수. 전기 1kWh = 424gCO₂,
+                  수도 1㎥ = 332gCO₂, 가스 1㎥ = 2,240gCO₂ 기준입니다. 현재 진단 데이터에는 수도 사용량이 없어 전기와 가스 기준으로 산정합니다.
+                </p>
               </div>
             </div>
           </div>
@@ -941,6 +1071,8 @@ export default async function DashboardPage({
 
       <section className="mx-auto max-w-6xl px-6 py-10">
         <div className="grid grid-cols-1 gap-8">
+          <SavingEstimateCard estimate={report.saving_estimate} />
+
           <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">최근 12개월 kWh 기준 비교</p>

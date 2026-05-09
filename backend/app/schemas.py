@@ -167,3 +167,4 @@ class ReportResponse(BaseModel):
     energy: Optional[ReportEnergyInfo] = None
     peer_benchmark: Optional[Dict[str, Any]] = None
     ai_diagnosis: Optional[AiDiagnosis] = None
+    saving_estimate: Optional[Dict[str, Any]] = None

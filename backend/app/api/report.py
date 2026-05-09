@@ -16,6 +16,7 @@ from app.services.analysis import (
 )
 from app.services.llm_report import generate_report_text
 from app.services.peer_group import find_peer_buildings
+from app.services.saving_estimate import build_saving_estimate
 
 router = APIRouter(tags=["report"])
 
@@ -503,6 +504,7 @@ def build_energy_usage_report(
     peer_benchmark_row: Optional[Dict[str, Any]] = None,
     electric_ai_row: Optional[Dict[str, Any]] = None,
     gas_ai_row: Optional[Dict[str, Any]] = None,
+    db: Optional[Session] = None,
 ) -> schemas.ReportResponse:
     building = _master_building_info(building_item, fallback_address=request.address)
     peer_benchmark = _build_peer_benchmark_response(peer_benchmark_row)
@@ -526,6 +528,8 @@ def build_energy_usage_report(
                 "peer_benchmark": peer_benchmark,
                 "ai_diagnosis": ai_diagnosis,
             }
+            saving_estimate = build_saving_estimate(None, [], peer_benchmark_row, None, None)
+            raw_analysis_json["saving_estimate"] = saving_estimate
             return schemas.ReportResponse(
                 report_mode="estimated",
                 message="실측 에너지 사용량이 없어 AI 추정 기반 참고용 진단을 표시합니다.",
@@ -558,8 +562,10 @@ def build_energy_usage_report(
                 },
                 peer_benchmark=peer_benchmark,
                 ai_diagnosis=ai_diagnosis,
+                saving_estimate=saving_estimate,
             )
 
+        saving_estimate = build_saving_estimate(None, [], peer_benchmark_row, None, None)
         return schemas.ReportResponse(
             status="energy_data_missing",
             report_mode="no_data",
@@ -585,6 +591,7 @@ def build_energy_usage_report(
                 "building": building,
                 "energy_source": "none",
                 "peer_benchmark": peer_benchmark,
+                "saving_estimate": saving_estimate,
             },
             energy={
                 "source": "none",
@@ -599,6 +606,7 @@ def build_energy_usage_report(
             },
             peer_benchmark=peer_benchmark,
             ai_diagnosis=ai_diagnosis,
+            saving_estimate=saving_estimate,
         )
 
     monthly_energy = []
@@ -681,6 +689,7 @@ def build_energy_usage_report(
     interpretation = _peer_interpretation(peer_benchmark, electricity_ratio, gas_ratio)
     period_start = electricity_monthly[0].use_ym if electricity_monthly else None
     period_end = electricity_monthly[-1].use_ym if electricity_monthly else None
+    saving_estimate = build_saving_estimate(db, ordered_usage_rows, peer_benchmark_row, period_start, period_end)
     raw_analysis_json = {
         "building": building,
         "energy_source": "db",
@@ -688,6 +697,7 @@ def build_energy_usage_report(
         "is_estimated_gas_included": estimated_gas_included,
         "peer_benchmark": peer_benchmark,
         "ai_diagnosis": ai_diagnosis,
+        "saving_estimate": saving_estimate,
     }
     measured_ai_diagnosis = ai_diagnosis.copy()
     if measured_ai_diagnosis.get("has_data"):
@@ -735,6 +745,7 @@ def build_energy_usage_report(
         },
         peer_benchmark=peer_benchmark,
         ai_diagnosis=measured_ai_diagnosis,
+        saving_estimate=saving_estimate,
     )
 
 
@@ -805,6 +816,7 @@ def create_report(request: schemas.ReportRequest, db: Session = Depends(get_db))
             peer_benchmark_row,
             electric_ai_row,
             gas_ai_row,
+            db,
         )
 
     if request.plat_plc or request.road_address:
