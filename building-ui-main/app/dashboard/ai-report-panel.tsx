@@ -594,10 +594,14 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
 export function AiReportPanel({
   report,
   defaultOpen = false,
+  buttonClassName = "inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition hover:bg-emerald-700",
+  buttonLabel = "AI 리포트 확인",
 }: {
   report: ReportApiResponse;
   address: string;
   defaultOpen?: boolean;
+  buttonClassName?: string;
+  buttonLabel?: string;
 }) {
   const buildingId = hasBuildingId(report);
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -734,13 +738,14 @@ export function AiReportPanel({
     <>
       <button
         type="button"
+        aria-label={buttonLabel}
         onClick={() => {
           setIsOpen(true);
           setError("");
         }}
-        className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition hover:bg-emerald-700"
+        className={buttonClassName}
       >
-        AI 리포트 확인
+        {buttonLabel}
       </button>
 
       {isOpen && (

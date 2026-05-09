@@ -7,10 +7,10 @@ import {
   formatNumber,
   formatRatioGap,
   getMonthlyEnergy,
-  reportHrefForReportBuilding,
   resolveAddressParam,
   type ReportApiResponse,
 } from "@/lib/building-api";
+import { AiReportPanel } from "../dashboard/ai-report-panel";
 
 function safePerArea(value: number, area: number) {
   return area > 0 ? value / area : 0;
@@ -343,12 +343,11 @@ export default async function ComparePage({
                 </div>
               ))}
             </div>
-            <Link
-              href={reportHrefForReportBuilding(building, address)}
-              className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition hover:bg-emerald-500"
-            >
-              AI 리포트 확인
-            </Link>
+            <AiReportPanel
+              report={report}
+              address={address}
+              buttonClassName="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition hover:bg-emerald-500"
+            />
           </div>
         </section>
       </div>
