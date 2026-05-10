@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import localFont from "next/font/local";
 import Navbar from "@/components/Navbar";
 import "./globals.css";
+
+const notoSansKr = localFont({
+  src: "../public/fonts/noto-sans-kr/NotoSansKR-VariableFont_wght.woff2",
+  display: "swap",
+  weight: "100 900",
+  variable: "--font-noto-sans-kr",
+});
 
 export const metadata: Metadata = {
   title: "세상에 나쁜 건물은 없다 | 건물 에너지 효율 진단",
@@ -20,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-slate-50 text-slate-950">
+      <body className={`${notoSansKr.variable} flex min-h-full flex-col bg-slate-50 font-sans text-slate-950`}>
         <Navbar />
         <div className="flex-1">{children}</div>
         <footer className="border-t border-slate-200 bg-white py-8">
