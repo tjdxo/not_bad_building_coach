@@ -54,10 +54,20 @@ function hasExcludedAbsoluteStatus(value?: string | null) {
   return EXCLUDED_ABSOLUTE_STATUSES.has(String(value ?? "").trim());
 }
 
-export function getGradeVisual(input: {
+function absoluteMissingDescription(status?: string | null) {
+  if (hasExcludedAbsoluteStatus(status)) {
+    return "서울시 절대등급 적용 대상이 아니거나, 현재 기준에서 공식 절대등급을 산정하지 않는 건물입니다.";
+  }
+  return "공식 절대등급 산정에 필요한 등급값이 아직 연결되지 않았습니다. 상대등급과 유사군 비교를 함께 확인해 주세요.";
+}
+
+function relativeMissingDescription() {
+  return "유사군 벤치마크 또는 백분위 등급 데이터가 부족해 상대등급을 산정하지 못했습니다. 사용량 비교와 신뢰도 정보를 함께 확인해 주세요.";
+}
+
+export function getAbsoluteGradeVisual(input: {
   absoluteGrade?: string | null;
   absoluteStatus?: string | null;
-  relativeGrade?: string | null;
 }): GradeVisual {
   const absoluteGrade = normalizeGrade(input.absoluteGrade);
   if (absoluteGrade) {
@@ -66,24 +76,8 @@ export function getGradeVisual(input: {
       source: "absolute",
       imageSrc: GRADE_IMAGE_MAP[absoluteGrade],
       title: ABSOLUTE_GRADE_TEXT[absoluteGrade],
-      description: "서울시 건물 에너지 등급제 취지를 참고한 절대등급 기준입니다.",
+      description: "서울시 건물 에너지 등급 기준을 참고해 산정한 절대 기준의 등급입니다.",
       basisLabel: `절대등급 ${absoluteGrade} 기준`,
-    };
-  }
-
-  const relativeGrade = normalizeGrade(input.relativeGrade);
-  if (relativeGrade) {
-    const absoluteExcluded = hasExcludedAbsoluteStatus(input.absoluteStatus) || Boolean(input.absoluteGrade);
-
-    return {
-      grade: relativeGrade,
-      source: "relative",
-      imageSrc: GRADE_IMAGE_MAP[relativeGrade],
-      title: RELATIVE_GRADE_TEXT[relativeGrade],
-      description: "유사 건물군과의 상대 비교를 기준으로 표시합니다.",
-      basisLabel: absoluteExcluded
-        ? "절대등급 적용 제외 · 상대등급 기준 표시"
-        : `상대등급 ${relativeGrade} 기준`,
     };
   }
 
@@ -91,8 +85,56 @@ export function getGradeVisual(input: {
     grade: null,
     source: "none",
     imageSrc: null,
-    title: "등급 산정 정보 부족",
-    description: "에너지 사용량 또는 비교군 정보가 부족해 등급 이미지를 표시할 수 없습니다.",
-    basisLabel: "등급 정보 없음",
+    title: "절대등급 미산정",
+    description: absoluteMissingDescription(input.absoluteStatus),
+    basisLabel: "절대등급 정보 없음",
   };
+}
+
+export function getRelativeGradeVisual(input: {
+  relativeGrade?: string | null;
+}): GradeVisual {
+  const relativeGrade = normalizeGrade(input.relativeGrade);
+  if (relativeGrade) {
+    return {
+      grade: relativeGrade,
+      source: "relative",
+      imageSrc: GRADE_IMAGE_MAP[relativeGrade],
+      title: RELATIVE_GRADE_TEXT[relativeGrade],
+      description: "유사한 건물군 안에서의 상대적 위치를 백분위 기반으로 해석한 등급입니다.",
+      basisLabel: `상대등급 ${relativeGrade} 기준`,
+    };
+  }
+
+  return {
+    grade: null,
+    source: "none",
+    imageSrc: null,
+    title: "상대등급 미산정",
+    description: relativeMissingDescription(),
+    basisLabel: "상대등급 정보 없음",
+  };
+}
+
+export function getGradeVisualPair(input: {
+  absoluteGrade?: string | null;
+  absoluteStatus?: string | null;
+  relativeGrade?: string | null;
+}) {
+  return {
+    absoluteVisual: getAbsoluteGradeVisual(input),
+    relativeVisual: getRelativeGradeVisual(input),
+  };
+}
+
+export function getGradeVisual(input: {
+  absoluteGrade?: string | null;
+  absoluteStatus?: string | null;
+  relativeGrade?: string | null;
+}): GradeVisual {
+  const absoluteVisual = getAbsoluteGradeVisual(input);
+  if (absoluteVisual.grade) {
+    return absoluteVisual;
+  }
+  return getRelativeGradeVisual(input);
 }

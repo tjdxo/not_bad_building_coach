@@ -21,7 +21,7 @@ import {
   type SavingEstimate,
   type SavingEstimateEnergy,
 } from "@/lib/building-api";
-import { getGradeVisual } from "@/lib/grade-visual";
+import { getGradeVisualPair } from "@/lib/grade-visual";
 import { AiReportPanel } from "./ai-report-panel";
 import { DetailAnalysisGate } from "./detail-analysis-gate";
 import { GradeVisualCard } from "./grade-visual-card";
@@ -160,19 +160,21 @@ function BarChart({
   unit,
   emptyMessage,
   peerMissingMessage,
+  showPeer = true,
 }: {
   data: ChartPoint[];
   colorClass: string;
   unit: string;
   emptyMessage?: string;
   peerMissingMessage?: string;
+  showPeer?: boolean;
 }) {
   const maxValue = Math.max(
     1,
-    ...data.map((item) => Math.max(item.value ?? 0, item.avg ?? 0)),
+    ...data.map((item) => Math.max(item.value ?? 0, showPeer ? item.avg ?? 0 : 0)),
   );
   const hasData = data.some((item) => item.value !== null);
-  const hasPeerData = data.some((item) => item.avg !== null);
+  const hasPeerData = showPeer && data.some((item) => item.avg !== null);
 
   if (!hasData && emptyMessage) {
     return (
@@ -187,9 +189,9 @@ function BarChart({
       <div className="flex h-48 w-full min-w-0 items-end gap-1 overflow-visible sm:gap-2">
         {data.map((item, index) => {
           const value = item.value ?? 0;
-          const avg = item.avg ?? 0;
+          const avg = showPeer ? item.avg ?? 0 : 0;
           const valueLabel = formatChartValue(item.value, unit);
-          const avgLabel = formatChartValue(item.avg, unit);
+          const avgLabel = showPeer ? formatChartValue(item.avg, unit) : "";
           const tooltipPosition =
             index === 0
               ? "left-0 translate-x-0"
@@ -202,13 +204,13 @@ function BarChart({
               <div className="flex w-full items-end justify-center gap-1 overflow-visible">
                 {hasPeerData && (
                   <div
-                    className={`w-2 rounded-t ${item.avg === null ? "bg-transparent" : "bg-slate-200"}`}
+                    className={`energy-bar-rise w-2 rounded-t ${item.avg === null ? "bg-transparent" : "bg-slate-200"}`}
                     style={{ height: `${(avg / maxValue) * 160}px` }}
                   />
                 )}
                 <div className="group relative flex items-end justify-center overflow-visible">
                   <div
-                    className={`w-3 rounded-t ${colorClass}`}
+                    className={`energy-bar-rise w-3 rounded-t ${colorClass}`}
                     style={{ height: `${(value / maxValue) * 160}px` }}
                   />
                   <div
@@ -219,7 +221,7 @@ function BarChart({
                       대상 건물: {valueLabel}
                       {item.isEstimated ? " (추정)" : ""}
                     </div>
-                    {item.avg !== null && <div>유사 건물 평균: {avgLabel}</div>}
+                    {showPeer && item.avg !== null && <div>유사 건물 평균: {avgLabel}</div>}
                   </div>
                 </div>
               </div>
@@ -242,6 +244,90 @@ function BarChart({
         <p className="mt-3 text-center text-xs font-bold text-slate-400">{peerMissingMessage}</p>
       )}
     </div>
+  );
+}
+
+function MonthlyUsageCharts({
+  electricityData,
+  gasData,
+  isEstimatedIncluded,
+  isEstimatedGasIncluded,
+  peerBenchmarkMissing,
+  showPeer,
+}: {
+  electricityData: ChartPoint[];
+  gasData: ChartPoint[];
+  isEstimatedIncluded?: boolean;
+  isEstimatedGasIncluded?: boolean;
+  peerBenchmarkMissing: boolean;
+  showPeer: boolean;
+}) {
+  const peerMessage = showPeer
+    ? peerBenchmarkMissing
+      ? "유사군 평균 데이터가 아직 연결되지 않았습니다."
+      : "유사군 월별 평균 데이터 없음"
+    : "결제 후 유사 건물 평균을 함께 비교할 수 있습니다.";
+
+  return (
+    <>
+      <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {showPeer ? "최근 12개월 kWh 기준 내 건물과 유사 건물 평균 비교" : "최근 12개월 kWh 기준 내 건물 사용량"}
+            </p>
+          </div>
+          {!showPeer && (
+            <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+              유사군 평균 잠금
+            </span>
+          )}
+        </div>
+        {isEstimatedIncluded && (
+          <p className="mt-3 text-xs font-bold text-amber-700">
+            일부 월별 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
+          </p>
+        )}
+        <BarChart
+          data={electricityData}
+          colorClass="bg-emerald-500"
+          unit="kWh"
+          emptyMessage="전기 사용량 데이터가 부족합니다."
+          peerMissingMessage={peerMessage}
+          showPeer={showPeer}
+        />
+      </div>
+
+      <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {showPeer ? "최근 12개월 m³ 기준 내 건물과 유사 건물 평균 비교" : "최근 12개월 m³ 기준 내 건물 사용량"}
+            </p>
+          </div>
+          {!showPeer && (
+            <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+              유사군 평균 잠금
+            </span>
+          )}
+        </div>
+        {isEstimatedGasIncluded && (
+          <p className="mt-3 text-xs font-bold text-amber-700">
+            일부 월별 가스 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
+          </p>
+        )}
+        <BarChart
+          data={gasData}
+          colorClass="bg-blue-500"
+          unit="m³"
+          emptyMessage="가스 사용량 데이터가 부족합니다."
+          peerMissingMessage={peerMessage}
+          showPeer={showPeer}
+        />
+      </div>
+    </>
   );
 }
 
@@ -654,7 +740,7 @@ function AiEstimatedDashboard({
   const needsUserInput = Boolean(aiDiagnosis?.needs_user_input);
   const absoluteGrade = absoluteGradeSummary(report.peer_benchmark);
   const showAbsoluteGrade = shouldShowAbsoluteGrade(report.peer_benchmark);
-  const gradeVisual = getGradeVisual({
+  const gradeVisuals = getGradeVisualPair({
     absoluteGrade: report.peer_benchmark?.absolute_grade?.grade,
     absoluteStatus:
       report.peer_benchmark?.absolute_grade?.status ||
@@ -702,8 +788,12 @@ function AiEstimatedDashboard({
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-stretch">
-          <GradeVisualCard visual={gradeVisual} />
+        <div className="grid gap-5">
+          <GradeVisualCard
+            absoluteVisual={gradeVisuals.absoluteVisual}
+            relativeVisual={gradeVisuals.relativeVisual}
+            className="w-full"
+          />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {showAbsoluteGrade && (
             <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
@@ -983,7 +1073,7 @@ export default async function DashboardPage({
   const summaryCards = buildSummaryCards(report.peer_benchmark, currentCarbonEmissionTons);
   const benchmarkDetails = buildBenchmarkDetails(report.peer_benchmark);
   const peerBenchmarkMissing = !report.peer_benchmark?.has_data;
-  const gradeVisual = getGradeVisual({
+  const gradeVisuals = getGradeVisualPair({
     absoluteGrade: report.peer_benchmark?.absolute_grade?.grade,
     absoluteStatus:
       report.peer_benchmark?.absolute_grade?.status ||
@@ -1018,7 +1108,11 @@ export default async function DashboardPage({
               </div>
             </div>
             <div className="w-full space-y-5">
-              <GradeVisualCard visual={gradeVisual} className="mx-auto w-full max-w-3xl" />
+              <GradeVisualCard
+                absoluteVisual={gradeVisuals.absoluteVisual}
+                relativeVisual={gradeVisuals.relativeVisual}
+                className="mx-auto w-full max-w-5xl"
+              />
               <div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {summaryCards.map((card) => (
@@ -1045,95 +1139,95 @@ export default async function DashboardPage({
         <AnalysisCriteriaAccordion details={benchmarkDetails} />
 
         <div className="mt-8">
-        <DetailAnalysisGate report={report}>
-        <div className="grid grid-cols-1 gap-8">
-          <SavingEstimateCard estimate={report.saving_estimate} />
-
-          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-black text-slate-950">월별 전기 사용량</h2>
-            <p className="mt-1 text-sm text-slate-500">최근 12개월 kWh 기준 비교</p>
-            {report.energy?.is_estimated_included && (
-              <p className="mt-3 text-xs font-bold text-amber-700">
-                일부 월별 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
-              </p>
-            )}
-            <BarChart
-              data={electricityData}
-              colorClass="bg-emerald-500"
-              unit="kWh"
-              emptyMessage="전기 사용량 데이터가 부족합니다."
-              peerMissingMessage={
-                peerBenchmarkMissing
-                  ? "유사군 평균 데이터가 아직 연결되지 않았습니다."
-                  : "유사군 월별 평균 데이터 없음"
-              }
-            />
-          </div>
-          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
-            <p className="mt-1 text-sm text-slate-500">최근 12개월 m³ 기준 비교</p>
-            {report.energy?.is_estimated_gas_included && (
-              <p className="mt-3 text-xs font-bold text-amber-700">
-                일부 월별 가스 사용량은 주소 기반 매칭 및 연면적 비율 분배로 추정된 값입니다.
-              </p>
-            )}
-            <BarChart
-              data={gasData}
-              colorClass="bg-blue-500"
-              unit="m³"
-              emptyMessage="가스 사용량 데이터가 부족합니다."
-              peerMissingMessage={
-                peerBenchmarkMissing
-                  ? "유사군 평균 데이터가 아직 연결되지 않았습니다."
-                  : "유사군 월별 평균 데이터 없음"
-              }
-            />
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
-              <AiReportPanel report={report} address={address} defaultOpen={shouldOpenAiReport} />
+          <DetailAnalysisGate
+            report={report}
+            lockedChildren={
+              <div className="grid grid-cols-1 gap-8">
+                <MonthlyUsageCharts
+                  electricityData={electricityData}
+                  gasData={gasData}
+                  isEstimatedIncluded={report.energy?.is_estimated_included}
+                  isEstimatedGasIncluded={report.energy?.is_estimated_gas_included}
+                  peerBenchmarkMissing={peerBenchmarkMissing}
+                  showPeer={false}
+                />
+              </div>
+            }
+          >
+            <div className="grid grid-cols-1 gap-8">
+              <SavingEstimateCard estimate={report.saving_estimate} />
+              <MonthlyUsageCharts
+                electricityData={electricityData}
+                gasData={gasData}
+                isEstimatedIncluded={report.energy?.is_estimated_included}
+                isEstimatedGasIncluded={report.energy?.is_estimated_gas_included}
+                peerBenchmarkMissing={peerBenchmarkMissing}
+                showPeer
+              />
             </div>
-            <div className="mt-6 space-y-4">
-              {actions.map((action) => (
-                <div key={action.title} className="rounded-2xl bg-slate-50 p-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="font-black text-slate-950">{action.title}</h3>
-                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">
-                      영향도 {action.impact}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{action.desc}</p>
+
+            <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+              <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+                <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
+                <div className="mt-6 space-y-4">
+                  {actions.map((action) => (
+                    <div key={action.title} className="rounded-2xl bg-slate-50 p-5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="font-black text-slate-950">{action.title}</h3>
+                        <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">
+                          영향도 {action.impact}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{action.desc}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <aside className="rounded-3xl bg-slate-950 p-7 text-white shadow-sm">
+                <h2 className="text-xl font-black">정책 매칭</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {building.name}의 진단 결과와 건물 용도 기준으로 확인 가능한 지원 사업입니다.
+                </p>
+                <div className="mt-6 space-y-3">
+                  {["서울시 건물 에너지효율화(BRP) 융자 지원", "제로에너지건축 컨설팅 지원", "신재생에너지 보급 지원"].map((policy) => (
+                    <div key={policy} className="rounded-2xl bg-white/10 p-4 text-sm font-bold">
+                      {policy}
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            </div>
+          </DetailAnalysisGate>
+        </div>
+
+        <section className="mt-8 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-black tracking-[0.2em] text-emerald-600">다음 분석 단계</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                리포트 생성과 유사 건물 비교를 이어서 확인하세요
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
+                대시보드의 핵심 지표를 확인한 뒤, AI 리포트로 원인과 실행 순서를 정리하거나 유사 건물 상세 비교에서 비교군 분포를 더 자세히 볼 수 있습니다.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[430px]">
+              <AiReportPanel
+                report={report}
+                address={address}
+                defaultOpen={shouldOpenAiReport}
+                buttonClassName="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+              />
+              <Link
+                href={compareHrefForReportBuilding(building, address)}
+                className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-slate-800"
+              >
+                유사 건물 상세 비교
+              </Link>
             </div>
           </div>
-
-          <aside className="rounded-3xl bg-slate-950 p-7 text-white shadow-sm">
-            <h2 className="text-xl font-black">정책 매칭</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
-              {building.name}의 진단 결과와 건물 용도 기준으로 확인 가능한 지원 사업입니다.
-            </p>
-            <div className="mt-6 space-y-3">
-              {["서울시 건물 에너지효율화(BRP) 융자 지원", "제로에너지건축 컨설팅 지원", "신재생에너지 보급 지원"].map((policy) => (
-                <div key={policy} className="rounded-2xl bg-white/10 p-4 text-sm font-bold">
-                  {policy}
-                </div>
-              ))}
-            </div>
-            <Link
-              href={compareHrefForReportBuilding(building, address)}
-              className="mt-7 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-emerald-50"
-            >
-              유사 건물 상세 비교
-            </Link>
-          </aside>
-        </div>
-        </DetailAnalysisGate>
-        </div>
+        </section>
       </section>
     </main>
   );

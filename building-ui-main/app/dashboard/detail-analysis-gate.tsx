@@ -121,9 +121,11 @@ function LockedDetailAnalysis({
 
 export function DetailAnalysisGate({
   report,
+  lockedChildren,
   children,
 }: {
   report: ReportApiResponse;
+  lockedChildren?: ReactNode;
   children: ReactNode;
 }) {
   const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
@@ -133,12 +135,15 @@ export function DetailAnalysisGate({
   }
 
   return (
-    <LockedDetailAnalysis
-      report={report}
-      onUnlock={() => {
-        // TODO: 실제 결제 승인 결과로 잠금 해제하도록 교체합니다.
-        setIsPremiumUnlocked(true);
-      }}
-    />
+    <>
+      {lockedChildren}
+      <LockedDetailAnalysis
+        report={report}
+        onUnlock={() => {
+          // TODO: 실제 결제 승인 결과로 잠금 해제하도록 교체합니다.
+          setIsPremiumUnlocked(true);
+        }}
+      />
+    </>
   );
 }

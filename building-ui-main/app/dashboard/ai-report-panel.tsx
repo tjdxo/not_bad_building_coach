@@ -630,6 +630,11 @@ export function AiReportPanel({
     const setter = section === "electric" ? setElectricAnswers : section === "gas" ? setGasAnswers : setPolicyAnswers;
     setter((current) => {
       if (!question.multiple) {
+        if (current[question.key] === option) {
+          const next = { ...current };
+          delete next[question.key];
+          return next;
+        }
         return { ...current, [question.key]: option };
       }
 
@@ -639,6 +644,35 @@ export function AiReportPanel({
         : [...values, option];
       return { ...current, [question.key]: nextValues };
     });
+  }
+
+  function answerText(value?: string | string[]) {
+    const values = valueList(value).filter(Boolean);
+    return values.length ? values.join(", ") : "입력하지 않음";
+  }
+
+  function AnswerSummarySection({
+    title,
+    questions,
+    answers,
+  }: {
+    title: string;
+    questions: ChoiceQuestion[];
+    answers: Record<string, string | string[]>;
+  }) {
+    return (
+      <section className="rounded-2xl bg-slate-50 p-4">
+        <h3 className="text-sm font-black text-slate-950">{title}</h3>
+        <dl className="mt-3 space-y-2">
+          {questions.map((question) => (
+            <div key={question.key} className="text-xs leading-5">
+              <dt className="font-black text-slate-500">{question.label}</dt>
+              <dd className="mt-0.5 font-semibold text-slate-800">{answerText(answers[question.key])}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    );
   }
 
   async function generate(withAnswers: boolean) {
@@ -707,7 +741,7 @@ export function AiReportPanel({
           <div key={question.key}>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-black text-slate-950">{question.label}</h3>
-              {question.optional && <span className="text-xs font-bold text-slate-400">선택</span>}
+              {question.multiple && <span className="text-xs font-bold text-emerald-600">중복</span>}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {question.options.map((option) => {
@@ -903,15 +937,9 @@ export function AiReportPanel({
                   선택하지 않은 항목은 모름으로 해석하지 않고, 리포트에서 데이터 부족으로 다룹니다.
                 </p>
                 <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                  <pre className="max-h-60 overflow-auto rounded-2xl bg-slate-50 p-4 text-xs text-slate-600">
-                    {JSON.stringify(electricAnswers, null, 2)}
-                  </pre>
-                  <pre className="max-h-60 overflow-auto rounded-2xl bg-slate-50 p-4 text-xs text-slate-600">
-                    {JSON.stringify(gasAnswers, null, 2)}
-                  </pre>
-                  <pre className="max-h-60 overflow-auto rounded-2xl bg-slate-50 p-4 text-xs text-slate-600">
-                    {JSON.stringify(policyAnswers, null, 2)}
-                  </pre>
+                  <AnswerSummarySection title="전기 사용 패턴" questions={electricQuestions} answers={electricAnswers} />
+                  <AnswerSummarySection title="가스/난방 사용 패턴" questions={gasQuestions} answers={gasAnswers} />
+                  <AnswerSummarySection title="정책 매칭 정보" questions={policyQuestions} answers={policyAnswers} />
                 </div>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
                   <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">

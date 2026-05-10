@@ -475,7 +475,7 @@ export default function SearchPage() {
                           {building.plat_plc || "지번 주소 정보 없음"}
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 md:max-w-[180px] md:justify-end">
+                      <div className="flex flex-col items-start gap-2 md:min-w-[120px] md:items-end">
                         {scaleParts.map((item) => (
                           <span
                             key={item}
@@ -544,7 +544,7 @@ export default function SearchPage() {
                     {selectedBuilding.plat_plc}
                   </p>
                   {buildingScale(selectedBuilding) && (
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-col items-start gap-2">
                       {buildingScaleParts(selectedBuilding).map((item) => (
                         <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
                           {item}
