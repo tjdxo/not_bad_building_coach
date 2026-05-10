@@ -581,7 +581,7 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
         </ReportCard>
       </div>
 
-      <ReportCard title="사용자 입력 반영 및 주의사항">
+      <ReportCard title="사용자 입력 반영 및 주의사항" className="mt-6">
         <p>{report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다."}</p>
         <div className="mt-3">
           <BulletList items={[...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? [])]} />
@@ -853,7 +853,7 @@ export function AiReportPanel({
                   onClick={() => generate(false)}
                   className="rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-emerald-200 disabled:opacity-60"
                 >
-                  <div className="text-lg font-black text-slate-950">바로 리포트 생성</div>
+                  <div className="text-lg font-black text-slate-950">바로 생성</div>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                     현재 DB에 있는 진단 결과만으로 빠르게 리포트를 만듭니다.
                   </p>
@@ -864,7 +864,7 @@ export function AiReportPanel({
                   onClick={() => setStep("electric")}
                   className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-left shadow-sm transition hover:border-emerald-300 disabled:opacity-60"
                 >
-                  <div className="text-lg font-black text-emerald-900">추가 정보 입력하기</div>
+                  <div className="text-lg font-black text-emerald-900">상세 기입</div>
                   <p className="mt-2 text-sm font-semibold leading-6 text-emerald-800">
                     운영시간, 냉난방 방식, 공실 여부를 반영해 원인과 추천 행동을 더 구체화합니다.
                   </p>
@@ -879,7 +879,10 @@ export function AiReportPanel({
                   <h2 className="text-xl font-black text-slate-950">전기 사용 패턴</h2>
                 </div>
                 {renderQuestions("electric", electricQuestions)}
-                <div className="mt-6 flex justify-end">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+                  <button type="button" onClick={() => setStep("choice")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
+                    선택으로 돌아가기
+                  </button>
                   <button type="button" onClick={() => setStep("gas")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
                     다음
                   </button>
@@ -902,7 +905,7 @@ export function AiReportPanel({
                     이전
                   </button>
                   <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
-                    입력 확인
+                    다음
                   </button>
                 </div>
               </div>

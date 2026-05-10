@@ -1166,7 +1166,7 @@ export default async function DashboardPage({
               />
             </div>
 
-            <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+            <div className="mt-10 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
                 <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
                 <div className="mt-6 space-y-4">
@@ -1198,36 +1198,36 @@ export default async function DashboardPage({
                 </div>
               </aside>
             </div>
+
+            <section className="mt-8 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-black tracking-[0.2em] text-emerald-600">다음 분석 단계</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                    유사 건물 비교와 리포트 생성을 이어서 확인하세요
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
+                    유사 건물 상세 비교에서는 내 건물이 유사군 평균 대비 어느 항목에서 차이가 큰지 확인할 수 있습니다. AI 리포트에서는 원인 가설, 개선 우선순위, 리스크 시나리오를 확인할 수 있습니다.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[430px]">
+                  <Link
+                    href={compareHrefForReportBuilding(building, address)}
+                    className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                  >
+                    유사 건물 상세 비교
+                  </Link>
+                  <AiReportPanel
+                    report={report}
+                    address={address}
+                    defaultOpen={shouldOpenAiReport}
+                    buttonClassName="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                  />
+                </div>
+              </div>
+            </section>
           </DetailAnalysisGate>
         </div>
-
-        <section className="mt-8 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-black tracking-[0.2em] text-emerald-600">다음 분석 단계</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-                리포트 생성과 유사 건물 비교를 이어서 확인하세요
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                대시보드의 핵심 지표를 확인한 뒤, AI 리포트로 원인과 실행 순서를 정리하거나 유사 건물 상세 비교에서 비교군 분포를 더 자세히 볼 수 있습니다.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[430px]">
-              <AiReportPanel
-                report={report}
-                address={address}
-                defaultOpen={shouldOpenAiReport}
-                buttonClassName="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-500"
-              />
-              <Link
-                href={compareHrefForReportBuilding(building, address)}
-                className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-slate-800"
-              >
-                유사 건물 상세 비교
-              </Link>
-            </div>
-          </div>
-        </section>
       </section>
     </main>
   );

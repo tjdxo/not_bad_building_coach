@@ -9,13 +9,9 @@ function GradePanel({
   heading: string;
   visual: GradeVisual;
 }) {
-  const statusMessage = visual.grade
-    ? `${heading}은 ${visual.grade}등급, ${visual.title} 상태로 분석되었습니다.`
-    : `${heading}은 현재 산정되지 않았습니다.`;
-
   return (
     <div className="flex min-w-0 flex-col rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center">
-      <div className="text-xs font-black tracking-[0.18em] text-emerald-600">{heading}</div>
+      <div className="text-base font-black text-emerald-700">{heading}</div>
       <div className="mt-3">
         <GradeScaleLegend currentGrade={visual.grade} />
       </div>
@@ -46,9 +42,7 @@ function GradePanel({
           )}
           <span className="text-base font-black text-slate-950">{visual.title}</span>
         </div>
-        <div className="mt-2 text-xs font-black text-emerald-700">{visual.basisLabel}</div>
-        <p className="mt-3 max-w-[22rem] text-sm font-black leading-6 text-slate-950">{statusMessage}</p>
-        <p className="mt-2 max-w-[22rem] text-xs font-semibold leading-5 text-slate-500">{visual.description}</p>
+        <p className="mt-3 max-w-[22rem] text-sm font-semibold leading-6 text-slate-500">{visual.description}</p>
       </div>
     </div>
   );
@@ -67,10 +61,10 @@ export function GradeVisualCard({
 }) {
   const panels = absoluteVisual || relativeVisual
     ? [
-        { heading: "절대등급", visual: absoluteVisual },
-        { heading: "상대등급", visual: relativeVisual },
+        { heading: "절대 등급", visual: absoluteVisual },
+        { heading: "상대 등급", visual: relativeVisual },
       ].filter((item): item is { heading: string; visual: GradeVisual } => Boolean(item.visual))
-    : [{ heading: visual?.source === "relative" ? "상대등급" : "절대등급", visual }].filter(
+    : [{ heading: visual?.source === "relative" ? "상대 등급" : "절대 등급", visual }].filter(
         (item): item is { heading: string; visual: GradeVisual } => Boolean(item.visual),
       );
 
@@ -79,7 +73,7 @@ export function GradeVisualCard({
       <div className="mb-5 text-center">
         <h2 className="text-lg font-black text-slate-950">에너지 등급 진단</h2>
         <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-          절대등급은 기준표 기반의 등급, 상대등급은 유사 건물군 안에서의 위치를 의미합니다.
+          절대 등급은 기준표 기반, 상대 등급은 유사 건물군 내 위치를 의미합니다.
         </p>
       </div>
       <div className={`grid gap-4 ${panels.length > 1 ? "lg:grid-cols-2" : ""}`}>

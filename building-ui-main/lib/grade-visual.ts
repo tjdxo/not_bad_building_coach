@@ -77,7 +77,7 @@ export function getAbsoluteGradeVisual(input: {
       imageSrc: GRADE_IMAGE_MAP[absoluteGrade],
       title: ABSOLUTE_GRADE_TEXT[absoluteGrade],
       description: "서울시 건물 에너지 등급 기준을 참고해 산정한 절대 기준의 등급입니다.",
-      basisLabel: `절대등급 ${absoluteGrade} 기준`,
+      basisLabel: `절대 등급 ${absoluteGrade} 기준`,
     };
   }
 
@@ -85,9 +85,9 @@ export function getAbsoluteGradeVisual(input: {
     grade: null,
     source: "none",
     imageSrc: null,
-    title: "절대등급 미산정",
+    title: "절대 등급 미산정",
     description: absoluteMissingDescription(input.absoluteStatus),
-    basisLabel: "절대등급 정보 없음",
+    basisLabel: "절대 등급 정보 없음",
   };
 }
 
@@ -102,7 +102,7 @@ export function getRelativeGradeVisual(input: {
       imageSrc: GRADE_IMAGE_MAP[relativeGrade],
       title: RELATIVE_GRADE_TEXT[relativeGrade],
       description: "유사한 건물군 안에서의 상대적 위치를 백분위 기반으로 해석한 등급입니다.",
-      basisLabel: `상대등급 ${relativeGrade} 기준`,
+      basisLabel: `상대 등급 ${relativeGrade} 기준`,
     };
   }
 
@@ -110,9 +110,9 @@ export function getRelativeGradeVisual(input: {
     grade: null,
     source: "none",
     imageSrc: null,
-    title: "상대등급 미산정",
+    title: "상대 등급 미산정",
     description: relativeMissingDescription(),
-    basisLabel: "상대등급 정보 없음",
+    basisLabel: "상대 등급 정보 없음",
   };
 }
 

@@ -11,6 +11,7 @@ import {
 import { SEOUL_DISTRICTS, SEOUL_DONGS_BY_DISTRICT } from "@/lib/seoul-address";
 
 const LIMIT = 20;
+const PREMIUM_UNLOCK_STORAGE_PREFIX = "building-coach:premium-unlocked:";
 
 type SearchFilters = {
   district: string;
@@ -106,6 +107,12 @@ export default function SearchPage() {
   const searchControllerRef = useRef<AbortController | null>(null);
   const latestRequestIdRef = useRef(0);
 
+  useEffect(() => {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(PREMIUM_UNLOCK_STORAGE_PREFIX))
+      .forEach((key) => window.localStorage.removeItem(key));
+  }, []);
+
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / LIMIT)), [total]);
   const dongs = useMemo(() => {
     if (!district) {
@@ -115,6 +122,7 @@ export default function SearchPage() {
     return SEOUL_DONGS_BY_DISTRICT[district as keyof typeof SEOUL_DONGS_BY_DISTRICT] ?? [];
   }, [district]);
   const canSearch = Boolean(district || dong || query.trim() || buildingKeyword.trim());
+  const searchControlsDisabled = loading;
 
   const resetSearchPage = () => {
     setPage(1);
@@ -311,7 +319,8 @@ export default function SearchPage() {
                   name="district"
                   value={district}
                   onChange={(event) => setDistrict(event.target.value)}
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  disabled={searchControlsDisabled}
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="">전체 구</option>
                   {SEOUL_DISTRICTS.map((item) => (
@@ -335,7 +344,7 @@ export default function SearchPage() {
                     setDong(event.target.value);
                     resetSearchPage();
                   }}
-                  disabled={!district}
+                  disabled={!district || searchControlsDisabled}
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="">{district ? "전체 동" : "구를 먼저 선택하세요"}</option>
@@ -360,8 +369,9 @@ export default function SearchPage() {
                     setQuery(event.target.value);
                     resetSearchPage();
                   }}
+                  disabled={searchControlsDisabled}
                   placeholder="예: 성내천로, 거여동 362, 33다길 2"
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
@@ -378,8 +388,9 @@ export default function SearchPage() {
                     setBuildingKeyword(event.target.value);
                     resetSearchPage();
                   }}
+                  disabled={searchControlsDisabled}
                   placeholder="예: 101동, 141동, 경비실20, 상가동"
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>

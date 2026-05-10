@@ -343,10 +343,22 @@ export default async function ComparePage({
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-black tracking-[0.2em] text-emerald-600">AI 리포트</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">비교 결과를 리포트로 정리하세요</h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                유사군 비교 결과와 개선 우선순위를 바탕으로 원인 가설과 실행 순서를 확인할 수 있습니다.
+              </p>
+            </div>
             <AiReportPanel
               report={report}
               address={address}
-              buttonClassName="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition hover:bg-emerald-500"
+              buttonClassName="inline-flex h-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500"
             />
           </div>
         </section>
