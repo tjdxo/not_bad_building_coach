@@ -21,11 +21,15 @@ import {
   type SavingEstimate,
   type SavingEstimateEnergy,
 } from "@/lib/building-api";
+import { buildContractorRecommendations } from "@/lib/contractor-recommendations";
 import { getGradeVisualPair } from "@/lib/grade-visual";
+import { buildPolicyRecommendations } from "@/lib/policy-recommendations";
 import { AiReportPanel } from "./ai-report-panel";
+import { ContractorRecommendationCard } from "./contractor-recommendation-card";
 import { DetailAnalysisGate } from "./detail-analysis-gate";
 import { GradeVisualCard } from "./grade-visual-card";
 import { ManualEnergyDashboard } from "./manual-energy-dashboard";
+import { PolicyRecommendationCard } from "./policy-recommendation-card";
 
 type ChartPoint = {
   month: string;
@@ -1083,6 +1087,8 @@ export default async function DashboardPage({
       report.peer_benchmark?.relative_grade?.relative_grade_by_seoul_percentile ||
       report.peer_benchmark?.relative_grade?.appendix1_proxy_grade_by_current_peer_percentile,
   });
+  const policyRecommendations = buildPolicyRecommendations(report);
+  const contractorRecommendations = buildContractorRecommendations(report, policyRecommendations);
   return (
     <main className="min-h-screen pb-16">
       <section className="border-b border-slate-200 bg-white py-10">
@@ -1166,7 +1172,7 @@ export default async function DashboardPage({
               />
             </div>
 
-            <div className="mt-10 grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+            <section className="mt-10 grid gap-8">
               <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
                 <h2 className="text-xl font-black text-slate-950">AI 우선 실행 액션</h2>
                 <div className="mt-6 space-y-4">
@@ -1184,20 +1190,11 @@ export default async function DashboardPage({
                 </div>
               </div>
 
-              <aside className="rounded-3xl bg-slate-950 p-7 text-white shadow-sm">
-                <h2 className="text-xl font-black">정책 매칭</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  {building.name}의 진단 결과와 건물 용도 기준으로 확인 가능한 지원 사업입니다.
-                </p>
-                <div className="mt-6 space-y-3">
-                  {["서울시 건물 에너지효율화(BRP) 융자 지원", "제로에너지건축 컨설팅 지원", "신재생에너지 보급 지원"].map((policy) => (
-                    <div key={policy} className="rounded-2xl bg-white/10 p-4 text-sm font-bold">
-                      {policy}
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            </div>
+              <div className="grid gap-8">
+                <PolicyRecommendationCard recommendations={policyRecommendations} />
+                <ContractorRecommendationCard recommendations={contractorRecommendations} />
+              </div>
+            </section>
 
             <section className="mt-8 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1213,7 +1210,7 @@ export default async function DashboardPage({
                 <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[430px]">
                   <Link
                     href={compareHrefForReportBuilding(building, address)}
-                    className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                    className="inline-flex h-14 items-center justify-center rounded-2xl bg-emerald-500 px-5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-600"
                   >
                     유사 건물 상세 비교
                   </Link>

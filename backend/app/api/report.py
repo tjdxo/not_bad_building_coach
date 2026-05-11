@@ -118,6 +118,12 @@ def _coerce_int_or_none(value: Any) -> Optional[int]:
         return None
 
 
+def _clamp_peer_rank(rank: Optional[int], peer_count: Optional[int]) -> Optional[int]:
+    if not peer_count or peer_count <= 0 or rank is None:
+        return None
+    return min(peer_count, max(1, rank))
+
+
 def _coerce_bool_or_none(value: Any) -> Optional[bool]:
     if value is None:
         return None
@@ -181,6 +187,7 @@ def _build_peer_benchmark_response(row: Optional[Dict[str, Any]]) -> Dict[str, A
 
     peer_count = _coerce_int_or_none(row.get("peer_count"))
     peer_total_rank = _coerce_int_or_none(row.get("peer_total_rank"))
+    peer_total_rank = _clamp_peer_rank(peer_total_rank, peer_count)
     peer_rank_label = None
     if peer_count and peer_count > 0 and peer_total_rank:
         peer_rank_label = f"{peer_total_rank} / {peer_count}"

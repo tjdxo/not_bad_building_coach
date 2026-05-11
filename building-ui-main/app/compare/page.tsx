@@ -49,6 +49,36 @@ function statusClass(status: string) {
   return classes[status] || "bg-slate-100 text-slate-500";
 }
 
+function clampedPeerRankLabel(peerCount?: number | null, rank?: number | null, fallbackLabel?: string | null) {
+  if (!peerCount || peerCount <= 0) {
+    return "산정 불가";
+  }
+
+  const parsedRank =
+    rank ??
+    (() => {
+      const firstNumber = String(fallbackLabel ?? "").match(/\d+/)?.[0];
+      return firstNumber ? Number(firstNumber) : null;
+    })();
+
+  if (!parsedRank || !Number.isFinite(parsedRank)) {
+    return "산정 불가";
+  }
+
+  const clampedRank = Math.min(peerCount, Math.max(1, Math.trunc(parsedRank)));
+  return `${formatNumber(clampedRank)} / ${formatNumber(peerCount)}`;
+}
+
+function peerSummaryTitle(label: string) {
+  if (label === "유사군 순위") {
+    return "대상 건물이 유사군 안에서 어느 위치인지 표시합니다.";
+  }
+  if (label === "유사군 수") {
+    return "비교에 사용된 유사 건물 수입니다.";
+  }
+  return undefined;
+}
+
 function buildComparisonMetrics(report: ReportApiResponse) {
   const monthlyEnergy = getMonthlyEnergy(report);
   const peakElectricity = Math.max(
@@ -231,8 +261,13 @@ export default async function ComparePage({
   const building = report.building;
   const comparisonMetrics = buildComparisonMetrics(report);
   const peerBenchmark = report.peer_benchmark;
+  const peerRankLabel = clampedPeerRankLabel(
+    peerBenchmark?.peer_count,
+    peerBenchmark?.peer_total_rank,
+    report.peer_group?.label || peerBenchmark?.peer_rank_label,
+  );
   const peerSummary = [
-    ["유사군 순위", report.peer_group?.label || peerBenchmark?.peer_rank_label || "산정 불가"],
+    ["유사군 순위", peerRankLabel],
     ["유사군 수", peerBenchmark?.peer_count ? `${formatNumber(peerBenchmark.peer_count)}개` : "산정 불가"],
     ["상대 등급", peerBenchmark?.relative_grade?.grade || "산정 불가"],
     ["절대 등급", peerBenchmark?.absolute_grade?.grade || "산정 불가"],
@@ -260,7 +295,7 @@ export default async function ComparePage({
 
         <section className="mb-8 grid gap-4 sm:grid-cols-5">
           {peerSummary.map(([label, value]) => (
-            <div key={label} className="rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+            <div key={label} title={peerSummaryTitle(label)} className="rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-sm">
               <div className="text-xs font-black text-slate-400">{label}</div>
               <div className="mt-2 text-xl font-black text-slate-950">{value}</div>
             </div>
