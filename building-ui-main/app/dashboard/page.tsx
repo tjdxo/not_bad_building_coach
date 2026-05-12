@@ -636,14 +636,25 @@ function publicBadge(value?: string | null) {
   if (!value) {
     return "";
   }
+  const normalized = value.replaceAll("가스 미사용 가능", "가스 미사용 가능성 존재");
   if (
     /service_strategy|low_peer_reference|monthly_year_round_gas_reference|residential_clean_train_ai_primary_patch|type_uncertain_baseline_reference|display_main|baseline/i.test(
-      value,
+      normalized,
     )
   ) {
     return "";
   }
-  return value.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값");
+  return normalized.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값");
+}
+
+function sanitizeAiDiagnosisText(value: string) {
+  return value
+    .replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델")
+    .replaceAll("baseline", "유사건물 중앙값")
+    .replace(/\s*\([a-z][a-z0-9_]*\)/gi, "")
+    .replace(/\b[a-z]+(?:_[a-z0-9]+){1,}\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function AiSummaryCard({ label, value, desc }: { label: string; value: string; desc?: string }) {
@@ -678,6 +689,7 @@ function AiEnergyCard({
 
   const badges = [
     publicBadge(diagnosis.diagnosis_label),
+    "1년치 추정",
     diagnosis.confidence_label ? `신뢰도 ${diagnosis.confidence_label}` : "",
     publicBadge(diagnosis.front_badge),
     publicBadge(diagnosis.quality_flag),
@@ -729,7 +741,7 @@ function AiEnergyCard({
         <div className="mt-5">
           <div className="text-sm font-black text-slate-400">AI 요약</div>
           <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
-            {diagnosis.summary.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값")}
+            {sanitizeAiDiagnosisText(diagnosis.summary)}
           </p>
           <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
             서비스 표시 기준값은 AI 예측값과 유사건물 중앙값을 함께 고려해 산정한 참고 기준입니다.
@@ -740,7 +752,7 @@ function AiEnergyCard({
         <div className="mt-5">
           <div className="text-sm font-black text-slate-400">권고 사항</div>
           <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
-            {diagnosis.recommendation.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값")}
+            {sanitizeAiDiagnosisText(diagnosis.recommendation)}
           </p>
         </div>
       )}
@@ -818,7 +830,7 @@ function AiEstimatedDashboard({
             relativeVisual={gradeVisuals.relativeVisual}
             className="w-full"
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="mx-auto grid w-full max-w-6xl justify-center gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(160px,180px))]">
           {showAbsoluteGrade && (
             <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
           )}
