@@ -26,6 +26,16 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _parse_number(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        number = float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
 def _parse_approval_year(raw: Any) -> Optional[int]:
     if raw is None:
         return None
@@ -101,6 +111,18 @@ def _is_public(user_answers: Dict[str, Any]) -> Optional[bool]:
     return None
 
 
+def _is_public_like_by_purpose(building: Dict[str, Any]) -> bool:
+    purpose = " ".join(
+        [
+            _text(building.get("purpose")),
+            _text(building.get("purp_nm")),
+            _text(building.get("main_purpose")),
+            _text(building.get("building_type")),
+        ]
+    )
+    return any(token in purpose for token in ["공공", "학교", "교육", "도서관", "보건", "노유자", "어린이집", "복지", "센터", "청사"])
+
+
 def _energy_overuse(peer_benchmark: Dict[str, Any]) -> Tuple[bool, bool, bool]:
     electric = peer_benchmark.get("electric_vs_peer_pct")
     gas = peer_benchmark.get("gas_vs_peer_pct")
@@ -153,6 +175,8 @@ def match_policies(
     over_15, over_10 = _age_flags(building, answers)
     residential = _is_residential(building, answers)
     public = _is_public(answers)
+    public_like = _is_public_like_by_purpose(building)
+    gross_area = _parse_number(building.get("grs_ar") or building.get("gross_floor_area") or building.get("area"))
     electric_high, gas_high, total_high = _energy_overuse(peer_benchmark)
     interests = _value_list(_answer(answers, "policy", "improvement_interests"))
     relation = _text(_answer(answers, "policy", "building_relationship"))
@@ -264,6 +288,24 @@ def match_policies(
             else:
                 missing.append("참여 후 절감 실적 확인이 필요합니다.")
 
+        elif policy_id == "building_energy_reporting_grade":
+            private_target = gross_area is not None and gross_area >= 3000
+            public_target = gross_area is not None and gross_area >= 1000 and (public is True or public_like)
+            if private_target:
+                score += 45
+                reasons.append("연면적 3,000㎡ 이상으로 민간건물 신고·등급제 대상 여부 확인이 필요합니다.")
+            elif public_target:
+                score += 45
+                reasons.append("공공시설로 추정되고 연면적 1,000㎡ 이상이어서 신고·등급제 대상 여부 확인이 필요합니다.")
+            elif gross_area is None:
+                score += 10
+                missing.append("연면적 확인이 필요합니다.")
+            else:
+                missing.append("공공·민간 구분과 연면적 기준 확인이 필요합니다.")
+            if public is None:
+                missing.append("공공·민간 구분 확인이 필요합니다.")
+            reasons.append("지원사업이라기보다 건물 에너지 사용량 신고와 등급 안내 대상 여부를 확인하는 제도입니다.")
+
         elif policy_id == "zeb_ai_optimization_consulting":
             if total_high or electric_high or gas_high:
                 score += 25
@@ -310,6 +352,6 @@ def match_policies(
             "recommended_count": len(recommended),
             "needs_more_info_count": len(needs_more_info),
             "score_note": "fit_score는 실제 합격률이 아니라 내부 참고용 정책 적합도입니다.",
-            "excluded_note": "건물 에너지 신고·등급제와 건물 온실가스 총량제는 직접 지원 혜택이 아니므로 추천 정책에서 제외합니다.",
+            "excluded_note": "건물 온실가스 총량제는 직접 지원 혜택이 아니므로 추천 정책에서 제외합니다.",
         },
     }

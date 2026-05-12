@@ -22,7 +22,7 @@ PEER_BENCHMARK_MONTHS = (
 )
 
 DEFAULT_ELECTRICITY_UNIT_PRICE = 180.0
-DEFAULT_GAS_UNIT_PRICE = 1200.0
+DEFAULT_GAS_UNIT_PRICE = 120.0
 
 SAVING_ESTIMATE_TITLE = "유사군 상위 10% 기준 예상 절약액"
 SAVING_ESTIMATE_CAUTION = (
@@ -62,7 +62,7 @@ def get_electricity_unit_price() -> float:
 
 
 def get_gas_unit_price() -> float:
-    return _env_float("GAS_UNIT_PRICE_KRW_PER_M3", DEFAULT_GAS_UNIT_PRICE)
+    return _env_float("GAS_UNIT_PRICE_KRW_PER_KWH", DEFAULT_GAS_UNIT_PRICE)
 
 
 def estimate_electricity_cost_krw(kwh: Optional[float], unit_price: Optional[float] = None) -> int:
@@ -72,11 +72,11 @@ def estimate_electricity_cost_krw(kwh: Optional[float], unit_price: Optional[flo
     return int(round(kwh * price))
 
 
-def estimate_gas_cost_krw(m3: Optional[float], unit_price: Optional[float] = None) -> int:
-    if not m3 or m3 <= 0:
+def estimate_gas_cost_krw(kwh: Optional[float], unit_price: Optional[float] = None) -> int:
+    if not kwh or kwh <= 0:
         return 0
     price = unit_price if unit_price is not None else get_gas_unit_price()
-    return int(round(m3 * price))
+    return int(round(kwh * price))
 
 
 def _sum_usage(rows: List[Dict[str, Any]], field: str) -> Optional[float]:
@@ -192,6 +192,7 @@ def build_saving_estimate(
             "caution": SAVING_ESTIMATE_CAUTION,
             "unit_price": {
                 "electricity_krw_per_kwh": electricity_unit_price,
+                "gas_krw_per_kwh": gas_unit_price,
                 "gas_krw_per_m3": gas_unit_price,
             },
         }
@@ -207,7 +208,7 @@ def build_saving_estimate(
     )
     exact_gas_target = _first_positive(
         peer_row,
-        ("peer_gas_top10_annual_m3", "peer_gas_p10_annual_m3"),
+        ("peer_gas_top10_annual_kwh", "peer_gas_p10_annual_kwh", "peer_gas_top10_annual_m3", "peer_gas_p10_annual_m3"),
     )
 
     peer_best_elec = None
@@ -228,7 +229,7 @@ def build_saving_estimate(
         estimate_electricity_cost_krw,
     )
     gas = _build_energy_saving_item(
-        "m3",
+        "kWh",
         my_gas,
         peer_mean_gas,
         peer_best_gas,
@@ -259,6 +260,7 @@ def build_saving_estimate(
         "benchmark_type": benchmark_type,
         "unit_price": {
             "electricity_krw_per_kwh": electricity_unit_price,
+            "gas_krw_per_kwh": gas_unit_price,
             "gas_krw_per_m3": gas_unit_price,
         },
         "electricity": electricity,

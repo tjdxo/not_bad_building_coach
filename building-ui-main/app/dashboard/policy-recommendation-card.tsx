@@ -66,6 +66,16 @@ export function PolicyRecommendationCard({
                       ))}
                     </ul>
                   </div>
+                  {policy.officialUrl && (
+                    <a
+                      href={policy.officialUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700"
+                    >
+                      공식 안내 보기
+                    </a>
+                  )}
                 </div>
               )}
             </article>
@@ -74,7 +84,7 @@ export function PolicyRecommendationCard({
       </div>
 
       <p className="mt-5 rounded-2xl bg-white/10 p-4 text-xs font-semibold leading-5 text-slate-300">
-        실제 선정 또는 지원 확정이 아닌, 공공데이터 기반의 검토 가능 후보입니다.
+        실제 신청 가능 여부는 공식 공고에서 확인해야 하며, 공공데이터 기반의 검토 가능 후보입니다.
       </p>
     </aside>
   );

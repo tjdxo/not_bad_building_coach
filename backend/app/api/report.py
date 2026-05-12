@@ -395,7 +395,7 @@ def _build_estimated_report_text(building_name: str, ai_diagnosis: Dict[str, Any
     summary = ", ".join(parts) if parts else "AI 추정 결과 없음"
     return (
         f"1. 한줄 진단: {building_name}은 실측 에너지 사용량이 부족해 AI 추정 기반 참고용 진단을 표시합니다.\n"
-        f"2. 왜 이렇게 분석되었는지: {summary}. AI 예측값, 유사건물 baseline, 서비스 기준값을 함께 검토했습니다.\n"
+        f"2. 왜 이렇게 분석되었는지: {summary}. AI 예측값, 유사건물 중앙값, 서비스 기준값을 함께 검토했습니다.\n"
         "3. 우선 실행 액션 3가지: 실제 고지서 확인, 전기·가스 사용량 직접 입력, 신뢰도 낮은 항목 우선 보정.\n"
         "4. 주의사항: 본 결과는 서울시 공식 등급이나 법적 효력을 갖는 인증 결과가 아닌 참고용 분석입니다."
     )
@@ -551,7 +551,7 @@ def build_energy_usage_report(
                     "peer_count": peer_benchmark.get("peer_count") or 0,
                     "energy_waste_index": 100,
                     "grade": "AI 추정 참고",
-                    "interpretation": "실측 데이터가 부족해 AI 예측값, 유사건물 baseline, 서비스 기준값을 함께 보여주는 참고용 진단입니다.",
+                    "interpretation": "실측 데이터가 부족해 AI 예측값, 유사건물 중앙값, 서비스 기준값을 함께 보여주는 참고용 진단입니다.",
                 },
                 monthly_energy=[],
                 report_text=_build_estimated_report_text(building["name"], ai_diagnosis),

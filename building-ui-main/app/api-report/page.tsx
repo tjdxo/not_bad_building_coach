@@ -203,7 +203,7 @@ export default async function ApiReportPage({
             <div className="mt-6 space-y-4">
               {[
                 ["전력 평균", `${formatNumber(energy_summary.target_avg_electricity_kwh)} kWh`],
-                ["가스 평균", `${formatNumber(energy_summary.target_avg_gas_m3)} m3`],
+                ["가스 평균", `${formatNumber(energy_summary.target_avg_gas_m3)} kWh`],
                 ["비교군 수", `${analysis.peer_count}개`],
                 ["낭비 지수", formatNumber(analysis.energy_waste_index)],
               ].map(([label, value]) => (
@@ -222,7 +222,7 @@ export default async function ApiReportPage({
                 ["전력 비율", formatNumber(energy_summary.electricity_ratio)],
                 ["가스 비율", formatNumber(energy_summary.gas_ratio)],
                 ["비교군 전력 평균", `${formatNumber(energy_summary.peer_avg_electricity_kwh)} kWh`],
-                ["비교군 가스 평균", `${formatNumber(energy_summary.peer_avg_gas_m3)} m3`],
+                ["비교군 가스 평균", `${formatNumber(energy_summary.peer_avg_gas_m3)} kWh`],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between border-b border-slate-100 pb-4">
                   <span className="text-sm font-bold text-slate-500">{label}</span>

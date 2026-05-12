@@ -68,7 +68,10 @@ function MiniBarChart({
                 style={{ height: `${(value / maxValue) * 160}px` }}
                 title={`${row.month}: ${formatNumber(value, 1)} ${unit}`}
               />
-              <span className="text-[10px] font-bold text-slate-400">{row.month}</span>
+              <span className="h-3 text-[9px] font-bold leading-none text-slate-400 sm:text-[10px] md:text-xs">
+                <span className={index % 2 === 0 || index === rows.length - 1 ? "sm:hidden" : "hidden"}>{row.month}</span>
+                <span className="hidden sm:inline">{row.month}</span>
+              </span>
             </div>
           );
         })}
@@ -180,7 +183,7 @@ export function ManualEnergyDashboard({
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-xs font-black text-slate-400">가스 월평균</p>
             <p className="mt-3 text-3xl font-black text-slate-950">
-              {formatNumber(gasAverage, 1)}
+              {formatNumber(gasAverage, 1)} kWh
             </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -197,8 +200,8 @@ export function ManualEnergyDashboard({
           </div>
           <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
-            <p className="mt-1 text-sm text-slate-500">사용자가 입력한 값 기준</p>
-            <MiniBarChart rows={rows} source="gas" colorClass="bg-blue-500" unit="" />
+            <p className="mt-1 text-sm text-slate-500">사용자가 입력한 kWh 기준</p>
+            <MiniBarChart rows={rows} source="gas" colorClass="bg-blue-500" unit="kWh" />
           </div>
         </div>
 

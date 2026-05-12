@@ -37,6 +37,39 @@ logger = logging.getLogger("app.ai_report")
 
 DEBUG_DUMP_DIR = Path(__file__).resolve().parents[2] / "debug_ai_report_payloads"
 
+INTERNAL_TEXT_REPLACEMENTS = {
+    "CatBoost+XGBoost": "CatBoost 기반 AI 모델",
+    "XGBoost": "",
+    "report_context.policy_matches": "지원사업 후보",
+    "policy_matches": "지원사업 후보",
+    "report_context": "진단 데이터",
+    "service_strategy": "진단 기준",
+    "display_main": "서비스 표시 기준값",
+    "service reference": "서비스 표시 기준값",
+    "service_reference": "서비스 표시 기준값",
+    "baseline": "유사건물 중앙값",
+    "backend": "시스템",
+}
+
+
+def _sanitize_user_text(value: str) -> str:
+    if "report_context.policy_matches" in value:
+        return "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다."
+    result = value
+    for source, replacement in INTERNAL_TEXT_REPLACEMENTS.items():
+        result = result.replace(source, replacement)
+    return result
+
+
+def _sanitize_report_payload(value: Any) -> Any:
+    if isinstance(value, str):
+        return _sanitize_user_text(value)
+    if isinstance(value, list):
+        return [_sanitize_report_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize_report_payload(item) for key, item in value.items()}
+    return value
+
 
 class AiReportRequest(BaseModel):
     building_id: Optional[int] = None
@@ -284,7 +317,7 @@ def create_ai_report(request: AiReportRequest, db: Session = Depends(get_db)) ->
                 ),
             ) from exc
 
-        parsed_report = extract_json_object(raw_text)
+        parsed_report = _sanitize_report_payload(extract_json_object(raw_text))
         payload = {
             "status": "ok",
             "provider": provider,
@@ -293,7 +326,7 @@ def create_ai_report(request: AiReportRequest, db: Session = Depends(get_db)) ->
             "report_audience": request.report_audience or "building_owner",
             "report_context": report_context,
             "report": parsed_report,
-            "raw_text": None if parsed_report else raw_text,
+            "raw_text": None if parsed_report else _sanitize_user_text(raw_text),
             "fallback": parsed_report is None,
             "cached": False,
         }

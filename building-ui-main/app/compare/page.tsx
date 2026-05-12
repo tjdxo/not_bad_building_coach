@@ -116,7 +116,7 @@ function buildComparisonMetrics(report: ReportApiResponse) {
     },
     {
       label: "월 평균 가스 사용량",
-      unit: "m³",
+      unit: "kWh",
       target: report.energy_summary.target_avg_gas_m3,
       peer: report.energy_summary.peer_avg_gas_m3,
       status: energyStatus(report.energy_summary.target_avg_gas_m3, report.energy_summary.peer_avg_gas_m3),
@@ -130,7 +130,7 @@ function buildComparisonMetrics(report: ReportApiResponse) {
     },
     {
       label: "단위 면적당 가스 소비",
-      unit: "m³/㎡",
+      unit: "kWh/㎡",
       target: gasPerArea,
       peer: peerGasPerArea,
       status: energyStatus(gasPerArea, peerGasPerArea),
@@ -158,7 +158,7 @@ function buildComparisonMetrics(report: ReportApiResponse) {
     },
     {
       label: "월 최대 가스 사용량",
-      unit: "m³",
+      unit: "kWh",
       target: peakGas,
       peer: peerPeakGas,
       status: energyStatus(peakGas, peerPeakGas),

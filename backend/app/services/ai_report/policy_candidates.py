@@ -11,7 +11,7 @@ POLICY_CANDIDATES: List[Dict[str, Any]] = [
         "target": "서울 소재 민간건축물 중 사용승인 후 15년 이상 경과한 건물",
         "support_items": ["창호 교체", "단열 보강", "LED 조명 교체", "BEMS/자동제어", "고효율 냉난방기", "히트펌프", "태양광/신재생에너지"],
         "required_data": ["use_apr_day", "public_private_type", "improvement_interests"],
-        "official_url": "https://housing.seoul.go.kr",
+        "official_url": "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx",
         "caution": "실제 신청 가능 여부와 한도, 금리는 최신 공고문 확인이 필요합니다.",
     },
     {
@@ -23,7 +23,7 @@ POLICY_CANDIDATES: List[Dict[str, Any]] = [
         "target": "15년 이상 경과한 주택 중 공시가격 등 세부 조건을 충족하는 주택",
         "support_items": ["창호 교체", "LED 조명 교체", "단열 보강"],
         "required_data": ["use_apr_day", "housing_type", "official_price_band", "owner_or_tenant"],
-        "official_url": "https://housing.seoul.go.kr",
+        "official_url": "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx",
         "caution": "공시가격, 소유자/세입자 여부 등 세부 조건 확인이 필요합니다.",
     },
     {
@@ -59,8 +59,20 @@ POLICY_CANDIDATES: List[Dict[str, Any]] = [
         "target": "서울시 거주 시민 또는 서울시 내 법인, 개인사업자, 단체",
         "support_items": ["에너지 절감 실천", "사용량 모니터링"],
         "required_data": ["participant_type", "energy_saving_record"],
-        "official_url": "https://ecomileage.seoul.go.kr",
+        "official_url": "https://ecomileage.seoul.go.kr/itf/adt/eco/energy/join.do",
         "caution": "인센티브는 실제 절감 실적과 제도 운영 기준에 따라 달라질 수 있습니다.",
+    },
+    {
+        "policy_id": "building_energy_reporting_grade",
+        "policy_name": "건물 에너지 신고·등급제",
+        "category": "제도 안내",
+        "benefit_type": "대상 여부 확인",
+        "summary": "건물의 전년도 에너지 사용량을 신고하고, 건물 유형별 목표 에너지 원단위 대비 등급을 안내하는 제도입니다.",
+        "target": "공공건물 연면적 1,000㎡ 이상, 민간건물 연면적 3,000㎡ 이상 대상 여부 확인 필요",
+        "support_items": ["대상 여부 확인", "에너지 등급 확인", "인센티브 가능성"],
+        "required_data": ["grs_ar", "purp_nm", "public_private_type"],
+        "official_url": "https://ecobuilding.seoul.go.kr/",
+        "caution": "공공·민간 구분과 실제 신고 대상 여부는 공식 안내와 건물 소유/운영 주체 기준 확인이 필요합니다.",
     },
     {
         "policy_id": "zeb_ai_optimization_consulting",
@@ -90,7 +102,6 @@ POLICY_CANDIDATES: List[Dict[str, Any]] = [
 
 
 EXCLUDED_RECOMMENDATION_POLICY_NAMES: List[str] = [
-    "건물 에너지 신고·등급제",
     "건물 온실가스 총량제",
 ]
 

@@ -190,7 +190,7 @@ function BarChart({
 
   return (
     <div className="mt-8 w-full min-w-0 overflow-visible pt-14">
-      <div className="flex h-48 w-full min-w-0 items-end gap-1 overflow-visible sm:gap-2">
+      <div className="flex h-48 w-full min-w-0 items-end gap-0.5 overflow-visible sm:gap-2">
         {data.map((item, index) => {
           const value = item.value ?? 0;
           const avg = showPeer ? item.avg ?? 0 : 0;
@@ -202,6 +202,8 @@ function BarChart({
               : index === data.length - 1
                 ? "right-0 translate-x-0"
                 : "left-1/2 -translate-x-1/2";
+
+          const showMobileLabel = index % 2 === 0 || index === data.length - 1;
 
           return (
             <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2 overflow-visible">
@@ -229,7 +231,10 @@ function BarChart({
                   </div>
                 </div>
               </div>
-              <span className="text-[10px] font-bold text-slate-400">{item.month}</span>
+              <span className="h-3 text-[9px] font-bold leading-none text-slate-400 sm:text-[10px] md:text-xs">
+                <span className={showMobileLabel ? "sm:hidden" : "hidden"}>{item.month}</span>
+                <span className="hidden sm:inline">{item.month}</span>
+              </span>
             </div>
           );
         })}
@@ -308,7 +313,7 @@ function MonthlyUsageCharts({
           <div>
             <h2 className="text-xl font-black text-slate-950">월별 가스 사용량</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {showPeer ? "최근 12개월 m³ 기준 내 건물과 유사 건물 평균 비교" : "최근 12개월 m³ 기준 내 건물 사용량"}
+              {showPeer ? "최근 12개월 kWh 기준 내 건물과 유사 건물 평균 비교" : "최근 12개월 kWh 기준 내 건물 사용량"}
             </p>
           </div>
           {!showPeer && (
@@ -325,7 +330,7 @@ function MonthlyUsageCharts({
         <BarChart
           data={gasData}
           colorClass="bg-blue-500"
-          unit="m³"
+          unit="kWh"
           emptyMessage="가스 사용량 데이터가 부족합니다."
           peerMissingMessage={peerMessage}
           showPeer={showPeer}
@@ -381,7 +386,7 @@ function formatSavingUsage(item?: SavingEstimateEnergy | null) {
   if (!item?.available || !isDisplayNumber(item.saving_usage)) {
     return "산정 불가";
   }
-  return `${formatNumber(item.saving_usage, 0)} ${item.unit === "m3" ? "m³" : item.unit || ""}`;
+  return `${formatNumber(item.saving_usage, 0)} ${item.unit === "m3" ? "kWh" : item.unit || ""}`;
 }
 
 function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) {
@@ -438,7 +443,7 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             절감 가능량 {formatSavingUsage(estimate.gas)} · 단가{" "}
-            {formatKrw(estimate.unit_price?.gas_krw_per_m3)}/m³
+            {formatKrw(estimate.unit_price?.gas_krw_per_kwh ?? estimate.unit_price?.gas_krw_per_m3)}/kWh
           </p>
         </div>
       </div>
@@ -525,7 +530,7 @@ function buildSummaryCards(peerBenchmark?: PeerBenchmark | null, currentCarbonEm
         ? `${formatNumber(currentCarbonEmissionTons, 1)}tCO₂`
         : "산정 불가",
     desc: "현재 사용량 연간 환산",
-    title: `온실가스 배출량 = 에너지 사용량 × 탄소배출계수. 전기 1kWh=${CARBON_EMISSION_FACTORS_GCO2.electricityKwh}gCO₂, 수도 1㎥=${CARBON_EMISSION_FACTORS_GCO2.waterM3}gCO₂, 가스 1㎥=${CARBON_EMISSION_FACTORS_GCO2.gasM3}gCO₂`,
+    title: `온실가스 배출량 = 에너지 사용량 × 탄소배출계수. 전기 1kWh=${CARBON_EMISSION_FACTORS_GCO2.electricityKwh}gCO₂, 가스는 서비스 기준 배출계수를 적용합니다.`,
   };
 
   return [
@@ -582,7 +587,7 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
       "절대 등급: 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.",
       "상대 등급: 서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
       "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
-      "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost 기반 추정 모델과 유사건물 baseline을 활용해 참고용 사용량을 추정합니다.",
+      "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost 기반 추정 모델과 유사건물 중앙값을 활용해 참고용 사용량을 추정합니다.",
       "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
     ],
   });
@@ -627,9 +632,23 @@ function aiMainValue(diagnosis?: EnergyAiLiteDiagnosis | null) {
   );
 }
 
+function publicBadge(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  if (
+    /service_strategy|low_peer_reference|monthly_year_round_gas_reference|residential_clean_train_ai_primary_patch|type_uncertain_baseline_reference|display_main|baseline/i.test(
+      value,
+    )
+  ) {
+    return "";
+  }
+  return value.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값");
+}
+
 function AiSummaryCard({ label, value, desc }: { label: string; value: string; desc?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl bg-white p-5 text-center shadow-sm ring-1 ring-slate-200">
       <div className="text-xs font-black text-slate-400">{label}</div>
       <div className="mt-2 text-2xl font-black text-slate-950">{value}</div>
       {desc && <div className="mt-2 text-xs font-bold leading-5 text-slate-500">{desc}</div>}
@@ -658,15 +677,15 @@ function AiEnergyCard({
   }
 
   const badges = [
-    diagnosis.diagnosis_label,
+    publicBadge(diagnosis.diagnosis_label),
     diagnosis.confidence_label ? `신뢰도 ${diagnosis.confidence_label}` : "",
-    diagnosis.front_badge,
-    diagnosis.quality_flag,
+    publicBadge(diagnosis.front_badge),
+    publicBadge(diagnosis.quality_flag),
   ].filter(Boolean);
   const metricRows = [
     ["핵심 표시값", formatOptionalNumber(aiMainValue(diagnosis), "kWh")],
     ["AI 예측값", formatOptionalNumber(diagnosis.ai_pred_kwh, "kWh")],
-    ["유사건물 baseline", formatOptionalNumber(diagnosis.baseline_kwh, "kWh")],
+    ["유사건물 중앙값", formatOptionalNumber(diagnosis.baseline_kwh, "kWh")],
     ["서비스 기준값", formatOptionalNumber(diagnosis.service_reference_kwh, "kWh")],
     ["예측 원단위", formatOptionalNumber(diagnosis.estimated_per_area_year, "kWh/㎡·년")],
     ["유사군 중앙값 대비", formatOptionalNumber(diagnosis.vs_peer_median_pct, "%")],
@@ -701,12 +720,6 @@ function AiEnergyCard({
         ))}
       </div>
 
-      {(diagnosis.quality_reason || diagnosis.service_strategy) && (
-        <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
-          {diagnosis.quality_reason || "추정 품질과 비교군 기준을 함께 확인해 주세요."}
-          {diagnosis.service_strategy && <span> 서비스 전략: {diagnosis.service_strategy}</span>}
-        </div>
-      )}
       {gasCaution && (
         <p className="mt-4 text-sm font-semibold leading-6 text-slate-500">
           가스 사용량은 난방방식, 지역난방 여부, 온수·취사 방식에 따라 차이가 커 실제 고지서 확인이 필요합니다.
@@ -715,13 +728,20 @@ function AiEnergyCard({
       {diagnosis.summary && (
         <div className="mt-5">
           <div className="text-sm font-black text-slate-400">AI 요약</div>
-          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">{diagnosis.summary}</p>
+          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
+            {diagnosis.summary.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값")}
+          </p>
+          <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+            서비스 표시 기준값은 AI 예측값과 유사건물 중앙값을 함께 고려해 산정한 참고 기준입니다.
+          </p>
         </div>
       )}
       {diagnosis.recommendation && (
         <div className="mt-5">
           <div className="text-sm font-black text-slate-400">권고 사항</div>
-          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">{diagnosis.recommendation}</p>
+          <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
+            {diagnosis.recommendation.replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델").replaceAll("baseline", "유사건물 중앙값")}
+          </p>
         </div>
       )}
     </section>
@@ -803,10 +823,10 @@ function AiEstimatedDashboard({
             <AiSummaryCard label="절대 등급" value={absoluteGrade.value} desc={absoluteGrade.desc} />
           )}
           <AiSummaryCard label="진단 방식" value="AI 추정 기반" desc="실측 사용량 부족 시 참고용으로 표시" />
-          <AiSummaryCard label="전기 추정 사용량" value={formatOptionalNumber(aiMainValue(electric), "kWh")} desc="display_main 우선" />
-          <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} desc="display_main 우선" />
-          <AiSummaryCard label="전기 신뢰도" value={electric?.confidence_label || "산정 불가"} desc={electric?.front_badge || electric?.quality_flag || ""} />
-          <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={gas?.front_badge || gas?.quality_flag || ""} />
+          <AiSummaryCard label="전기 추정 사용량" value={formatOptionalNumber(aiMainValue(electric), "kWh")} />
+          <AiSummaryCard label="가스 추정 사용량" value={formatOptionalNumber(aiMainValue(gas), "kWh")} />
+          <AiSummaryCard label="전기 신뢰도" value={electric?.confidence_label || "산정 불가"} desc={publicBadge(electric?.front_badge) || publicBadge(electric?.quality_flag)} />
+          <AiSummaryCard label="가스 신뢰도" value={gas?.confidence_label || "산정 불가"} desc={publicBadge(gas?.front_badge) || publicBadge(gas?.quality_flag)} />
         </div>
 
         </div>
@@ -820,7 +840,7 @@ function AiEstimatedDashboard({
             <div>
               <h2 className="text-lg font-black text-slate-950">AI 리포트</h2>
               <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                AI 추정값, baseline, 서비스 기준값, 유사군 정보를 종합해 참고용 리포트를 생성합니다.
+                AI 추정값, 유사건물 중앙값, 서비스 기준값, 유사군 정보를 종합해 참고용 리포트를 생성합니다.
               </p>
             </div>
             <AiReportPanel report={report} address={address} defaultOpen={defaultOpenAiReport} />
@@ -849,7 +869,7 @@ function AiEstimatedDashboard({
           <h2 className="text-xl font-black text-slate-950">분석 기준 안내</h2>
           <div className="mt-4 space-y-3 text-sm font-semibold leading-7 text-slate-600">
             <p>절대 등급은 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.</p>
-            <p>AI 추정 진단은 CatBoost 기반 추정 모델, 유사건물 baseline, 서비스 기준값을 함께 활용한 참고용 결과입니다.</p>
+            <p>AI 추정 진단은 CatBoost 기반 추정 모델과 유사건물 중앙값, 서비스 기준값을 함께 활용한 참고용 결과입니다.</p>
             <p>가스는 난방방식, 지역난방 여부, 온수·취사 방식에 따라 오차가 커질 수 있으므로 실제 고지서 확인이 필요합니다.</p>
             <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
           </div>
@@ -1132,8 +1152,8 @@ export default async function DashboardPage({
                   ))}
                 </div>
                 <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">
-                  ※ 온실가스 배출량 = 현재 에너지 사용량 × 탄소배출계수. 전기 1kWh = 424gCO₂,
-                  수도 1㎥ = 332gCO₂, 가스 1㎥ = 2,240gCO₂ 기준입니다. 현재 진단 데이터에는 수도 사용량이 없어 전기와 가스 기준으로 산정합니다.
+                  ※ 온실가스 배출량 = 현재 에너지 사용량 × 탄소배출계수. 전기와 가스 사용량 기준으로 산정하며,
+                  가스는 서비스 기준 배출계수를 적용합니다.
                 </p>
               </div>
             </div>

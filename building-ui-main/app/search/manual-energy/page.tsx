@@ -97,12 +97,12 @@ function ManualEnergyForm() {
 
         <form onSubmit={handleSubmit} className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
           <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-            <div className="grid grid-cols-[1fr_1fr_1fr] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4 text-xs font-black text-slate-500">
+            <div className="hidden grid-cols-[1fr_1fr_1fr] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4 text-xs font-black text-slate-500 md:grid">
               <div>월</div>
               <div>전기 사용량(kWh)</div>
-              <div>가스 사용량(선택)</div>
+              <div>가스 사용량(kWh, 선택)</div>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="hidden divide-y divide-slate-100 md:block">
               {rows.map((row, index) => (
                 <div key={row.month} className="grid grid-cols-[1fr_1fr_1fr] gap-3 px-5 py-3">
                   <div className="flex items-center text-sm font-black text-slate-700">
@@ -122,6 +122,35 @@ function ManualEnergyForm() {
                     onChange={(event) => updateRow(index, "gas", event.target.value)}
                     className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   />
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 p-4 md:hidden">
+              {rows.map((row, index) => (
+                <div key={row.month} className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-sm font-black text-slate-800">{row.month}</div>
+                  <div className="mt-3 grid gap-3">
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-500">전기 사용량(kWh)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.electricity}
+                        onChange={(event) => updateRow(index, "electricity", event.target.value)}
+                        className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-500">가스 사용량(kWh, 선택)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.gas}
+                        onChange={(event) => updateRow(index, "gas", event.target.value)}
+                        className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      />
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -188,7 +217,10 @@ function ManualEnergyForm() {
                     className="w-4 rounded-t bg-emerald-500"
                     style={{ height: `${(row.electricityValue / maxElectricity) * 170}px` }}
                   />
-                  <span className="text-[10px] font-bold text-slate-400">{row.month}</span>
+                  <span className="h-3 text-[9px] font-bold leading-none text-slate-400 sm:text-[10px] md:text-xs">
+                    <span className={chartRows.indexOf(row) % 2 === 0 || chartRows.indexOf(row) === chartRows.length - 1 ? "sm:hidden" : "hidden"}>{row.month}</span>
+                    <span className="hidden sm:inline">{row.month}</span>
+                  </span>
                 </div>
               ))}
             </div>

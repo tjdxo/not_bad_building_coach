@@ -4,11 +4,12 @@ export type PolicyRecommendation = {
   id: string;
   name: string;
   shortLabel: string;
-  status: "검토 가능" | "추가 확인" | "참여 가능" | "참고";
+  status: "검토 가능" | "대상 여부 확인" | "추가 확인" | "참여 가능" | "참고";
   categories: string[];
   description: string;
   matchReason: string;
   requiredChecks: string[];
+  officialUrl?: string | null;
 };
 
 type PolicyCandidate = PolicyRecommendation & {
@@ -56,6 +57,7 @@ export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRec
   const old10 = buildingAge !== null && buildingAge >= 10;
   const area = Number(report.building.gross_floor_area || report.building.grs_ar || 0);
   const largeArea = area >= 3000;
+  const publicReportingArea = area >= 1000;
   const electricHigh = report.energy_summary.electricity_ratio > 1.08;
   const gasHigh = report.energy_summary.gas_ratio > 1.08;
   const grade = gradeValue(report);
@@ -89,6 +91,7 @@ export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRec
         ? "유사군 대비 사용량 또는 등급 개선 여지가 있어 LED, 공조, BEMS, 창호 개선 검토와 연결될 수 있습니다."
         : "건물 에너지효율화 공사 항목과 연결 가능한 기본 검토 후보입니다.",
     requiredChecks: ["사용승인일", "소유 관계", "공사 항목", "실제 신청 자격"],
+    officialUrl: "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx",
     score: 25 + (old15 ? 24 : 0) + (lowGrade ? 20 : 0) + (electricHigh ? 15 : 0) + (gasHigh ? 15 : 0) + (largeArea ? 8 : 0),
   });
 
@@ -105,6 +108,7 @@ export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRec
         ? "주거용 노후 건물로 추정되어 창호, 조명, 차열도장 개선 항목과 연결될 수 있습니다."
         : "주택 유형, 공시가격, 기존 지원 이력 확인 후 검토할 수 있는 후보입니다.",
     requiredChecks: ["공시가격", "주택 유형", "기존 지원 이력", "소유자 신청 가능 여부"],
+    officialUrl: "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx",
     score: (residential ? 45 : 5) + (old15 ? 25 : 0) + (gasHigh ? 10 : 0) + (electricHigh ? 8 : 0),
   });
 
@@ -153,7 +157,29 @@ export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRec
         ? "실측 사용량 확인과 월별 모니터링을 통해 진단 신뢰도를 높이고 절감 실천과 연결할 수 있습니다."
         : "건물 유형과 무관하게 에너지 절감 실천과 사용량 관리에 연결할 수 있습니다.",
     requiredChecks: ["참여 주체", "계량 정보", "절감 기준 기간", "실측 사용량"],
+    officialUrl: "https://ecomileage.seoul.go.kr/itf/adt/eco/energy/join.do",
     score: 22 + (estimatedIncluded ? 18 : 0) + (reliabilityLow ? 12 : 0),
+  });
+
+  addCandidate(candidates, {
+    id: "building_energy_reporting_grade",
+    name: "건물 에너지 신고·등급제",
+    shortLabel: "신고·등급제",
+    status: largeArea || (publicLike && publicReportingArea) ? "대상 여부 확인" : "추가 확인",
+    categories: [
+      largeArea ? "민간 기준 검토" : publicLike && publicReportingArea ? "공공 기준 검토" : "대상 여부 확인",
+      "제도 안내",
+      "공식 공고 확인 필요",
+    ],
+    description:
+      "건물의 전년도 에너지 사용량을 신고하고, 건물 유형별 목표 에너지 원단위 대비 등급을 안내하는 제도입니다. 공공건물은 연면적 1,000㎡ 이상, 민간건물은 연면적 3,000㎡ 이상인 경우 대상 여부를 확인할 필요가 있습니다.",
+    matchReason:
+      largeArea || (publicLike && publicReportingArea)
+        ? "이 건물은 연면적 기준상 건물 에너지 신고·등급제 대상 여부를 확인할 필요가 있습니다."
+        : "공공·민간 구분과 연면적 기준을 확인해 대상 여부를 검토할 수 있습니다.",
+    requiredChecks: ["공공·민간 구분", "실제 신고 대상 여부", "건물 소유/운영 주체", "최신 공식 안내"],
+    officialUrl: "https://ecobuilding.seoul.go.kr/",
+    score: 18 + (largeArea ? 42 : 0) + (publicLike && publicReportingArea ? 38 : 0),
   });
 
   addCandidate(candidates, {
@@ -201,6 +227,7 @@ export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRec
         description: candidate.description,
         matchReason: candidate.matchReason,
         requiredChecks: candidate.requiredChecks,
+        officialUrl: candidate.officialUrl,
       };
       return item;
     });

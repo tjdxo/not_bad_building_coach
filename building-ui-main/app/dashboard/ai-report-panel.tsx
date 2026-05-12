@@ -162,7 +162,7 @@ function ReportCard({
 }
 
 function BulletList({ items }: { items?: string[] }) {
-  const visibleItems = (items ?? []).filter(Boolean);
+  const visibleItems = (items ?? []).map(sanitizeDisplayText).filter(Boolean);
   if (!visibleItems.length) {
     return <p className="text-slate-400">표시할 항목이 없습니다.</p>;
   }
@@ -178,12 +178,69 @@ function BulletList({ items }: { items?: string[] }) {
 }
 
 function escapeHtml(value: unknown) {
-  return String(value ?? "")
+  return sanitizeDisplayText(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function sanitizeDisplayText(value: unknown) {
+  const text = String(value ?? "");
+  if (text.includes("report_context.policy_matches")) {
+    return "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다.";
+  }
+  return text
+    .replaceAll("CatBoost+XGBoost", "CatBoost 기반 AI 모델")
+    .replaceAll("XGBoost", "")
+    .replaceAll("report_context.policy_matches", "지원사업 후보")
+    .replaceAll("policy_matches", "지원사업 후보")
+    .replaceAll("report_context", "진단 데이터")
+    .replaceAll("service_strategy", "진단 기준")
+    .replaceAll("display_main", "서비스 표시 기준값")
+    .replaceAll("service reference", "서비스 표시 기준값")
+    .replaceAll("service_reference", "서비스 표시 기준값")
+    .replaceAll("baseline", "유사건물 중앙값")
+    .replaceAll("backend", "시스템");
+}
+
+function sanitizeReportValue<T>(value: T): T {
+  if (typeof value === "string") {
+    return sanitizeDisplayText(value) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeReportValue(item)) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sanitizeReportValue(item)]),
+    ) as T;
+  }
+  return value;
+}
+
+function officialPolicyUrl(policy?: { policy_name?: string; official_url?: string | null; policy_id?: string }) {
+  const name = policy?.policy_name || "";
+  const id = policy?.policy_id || "";
+  if (
+    id.includes("brp") ||
+    name.includes("BRP") ||
+    name.includes("민간건물 에너지효율화") ||
+    name.includes("건물 에너지효율화")
+  ) {
+    return "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx";
+  }
+  if (name.includes("새빛주택") || name.includes("주택 에너지 개선")) {
+    return "https://brp.eseoul.go.kr/FUND/A_01_01_000.aspx";
+  }
+  if (id.includes("eco_mileage") || name.includes("에코마일리지") || name.includes("에너지 절감 인센티브")) {
+    return "https://ecomileage.seoul.go.kr/itf/adt/eco/energy/join.do";
+  }
+  if (id.includes("building_energy_reporting") || name.includes("건물 에너지 신고") || name.includes("건물에너지 신고") || name.includes("건물 에너지 등급제")) {
+    return "https://ecobuilding.seoul.go.kr/";
+  }
+  return policy?.official_url || "";
 }
 
 function listHtml(items?: string[]) {
@@ -301,7 +358,7 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
       policies.length
         ? policies
             .map(
-              (policy) => `<article class="item"><h3>${escapeHtml(policy.policy_name || "정책 후보")}</h3><p class="tag">${escapeHtml(policy.category || "")} · ${escapeHtml(policy.benefit_type || "")} · 정책 적합도 ${escapeHtml(policy.fit_score || "-")}점 · ${escapeHtml(policy.fit_label || "검토 가능")}</p><h4>추천 이유</h4>${listHtml(policy.matched_reasons)}<h4>추가 확인 필요</h4>${listHtml(policy.missing_checks)}<p>${escapeHtml(policy.recommended_next_step || "")}</p>${policy.official_url ? `<p><strong>공식 안내:</strong> ${escapeHtml(policy.official_url)}</p>` : ""}<p class="caution">${escapeHtml(policy.caution || "정확한 신청 가능 여부는 관련 기관 확인이 필요합니다.")}</p></article>`,
+              (policy) => `<article class="item"><h3>${escapeHtml(policy.policy_name || "정책 후보")}</h3><p class="tag">${escapeHtml(policy.category || "")} · ${escapeHtml(policy.benefit_type || "")} · 정책 적합도 ${escapeHtml(policy.fit_score || "-")}점 · ${escapeHtml(policy.fit_label || "검토 가능")}</p><h4>추천 이유</h4>${listHtml(policy.matched_reasons)}<h4>추가 확인 필요</h4>${listHtml(policy.missing_checks)}<p>${escapeHtml(policy.recommended_next_step || "")}</p>${officialPolicyUrl(policy) ? `<p><strong>공식 안내:</strong> ${escapeHtml(officialPolicyUrl(policy))}</p>` : ""}<p class="caution">${escapeHtml(policy.caution || "정확한 신청 가능 여부는 관련 기관 확인이 필요합니다.")}</p></article>`,
             )
             .join("")
         : '<p class="muted">현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.</p>',
@@ -309,7 +366,7 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
 
     ${sectionHtml(
       "사용자 입력 반영 및 주의사항",
-      `<p>${escapeHtml(report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다.")}</p>${listHtml([...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? [])])}`,
+      `<p>${escapeHtml(report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다.")}</p>${listHtml([...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? []), "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다."])}`,
     )}
   </main>
 </body>
@@ -405,15 +462,16 @@ function EnergyReportCard({
 }
 
 function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
-  const report = payload.report;
+  const report = sanitizeReportValue(payload.report);
+  const rawText = sanitizeDisplayText(payload.raw_text);
 
-  if (!report && payload.raw_text) {
+  if (!report && rawText) {
     return (
       <section className="ai-report-document rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-2xl font-black text-slate-950">건물 에너지 AI 진단 리포트</h2>
         <p className="mt-2 text-sm font-semibold text-amber-700">구조화된 JSON 파싱에 실패해 원문 리포트를 표시합니다.</p>
         <pre className="mt-5 whitespace-pre-wrap rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">
-          {payload.raw_text}
+          {rawText}
         </pre>
       </section>
     );
@@ -461,7 +519,9 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
             <div key={`${item.title}-${index}`} className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="font-black text-slate-950">{item.title || "원인 후보"}</h4>
-                <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-slate-500">신뢰도 {item.confidence || "확인 필요"}</span>
+                <span className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-center text-[11px] font-black leading-none text-slate-500">
+                  신뢰도 {item.confidence || "확인 필요"}
+                </span>
               </div>
               <p className="mt-2">{item.reason}</p>
               <p className="mt-2 text-xs font-bold text-emerald-700">확인할 것: {item.check_next}</p>
@@ -564,11 +624,11 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
                   </div>
                 )}
                 {policy.recommended_next_step && <p className="mt-3 font-bold text-slate-700">{policy.recommended_next_step}</p>}
-                {policy.official_url && (
+                {officialPolicyUrl(policy) && (
                   <a
-                    href={policy.official_url}
+                    href={officialPolicyUrl(policy)}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="mt-3 inline-flex rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
                   >
                     공식 안내 보기
@@ -584,7 +644,13 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
       <ReportCard title="사용자 입력 반영 및 주의사항" className="mt-6">
         <p>{report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다."}</p>
         <div className="mt-3">
-          <BulletList items={[...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? [])]} />
+          <BulletList
+            items={[
+              ...(report?.user_answer_reflection?.important_answers ?? []),
+              ...(report?.limitations ?? []),
+              "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다.",
+            ]}
+          />
         </div>
       </ReportCard>
     </section>

@@ -182,6 +182,7 @@ export type SavingEstimate = {
   unit_price?: {
     electricity_krw_per_kwh?: number | null;
     gas_krw_per_m3?: number | null;
+    gas_krw_per_kwh?: number | null;
   } | null;
   electricity?: SavingEstimateEnergy | null;
   gas?: SavingEstimateEnergy | null;
