@@ -293,44 +293,48 @@ export default async function ComparePage({
           </Link>
         </div>
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-5">
+        <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5 sm:gap-4">
           {peerSummary.map(([label, value]) => (
-            <div key={label} title={peerSummaryTitle(label)} className="rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+            <div key={label} title={peerSummaryTitle(label)} className="rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-sm sm:p-5">
               <div className="text-xs font-black text-slate-400">{label}</div>
-              <div className="mt-2 text-xl font-black text-slate-950">{value}</div>
+              <div className="mt-2 break-keep text-[clamp(0.85rem,3.4vw,1.25rem)] font-black leading-tight text-slate-950 sm:text-xl">
+                {value}
+              </div>
             </div>
           ))}
         </section>
 
-        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-12 gap-4 bg-slate-950 px-6 py-5 text-xs font-black uppercase tracking-wider text-white">
-            <div className="col-span-5">비교 항목</div>
-            <div className="col-span-3 text-center text-emerald-300">{building.name}</div>
-            <div className="col-span-3 text-center text-slate-300">유사 평균</div>
-            <div className="col-span-1 text-center">상태</div>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {comparisonMetrics.map((metric) => (
-              <div key={metric.label} className="grid grid-cols-12 items-center gap-4 px-6 py-5">
-                <div className="col-span-5">
-                  <div className="font-black text-slate-950">{metric.label}</div>
-                  <div className="mt-1 text-xs font-bold text-slate-400">{metric.unit}</div>
+        <div className="overflow-x-auto rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+          <div className="min-w-[680px]">
+            <div className="grid grid-cols-[2fr_1.15fr_1.15fr_1.05fr] gap-3 bg-slate-950 px-4 py-4 text-[11px] font-black uppercase tracking-wider text-white sm:gap-4 sm:px-6 sm:py-5 sm:text-xs">
+              <div>비교 항목</div>
+              <div className="text-center text-emerald-300">{building.name}</div>
+              <div className="text-center text-slate-300">유사 평균</div>
+              <div className="text-center">상태</div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {comparisonMetrics.map((metric) => (
+                <div key={metric.label} className="grid grid-cols-[2fr_1.15fr_1.15fr_1.05fr] items-center gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
+                  <div>
+                    <div className="text-sm font-black text-slate-950 sm:text-base">{metric.label}</div>
+                    <div className="mt-1 text-[11px] font-bold text-slate-400 sm:text-xs">{metric.unit}</div>
+                  </div>
+                  <div className="whitespace-nowrap text-center text-base font-black text-slate-950 sm:text-xl">
+                    {formatNumber(metric.target, 2)}
+                  </div>
+                  <div className="whitespace-nowrap text-center text-base font-black text-slate-400 sm:text-xl">
+                    {formatNumber(metric.peer, 2)}
+                  </div>
+                  <div className="flex justify-center text-center">
+                    <span
+                      className={`inline-flex min-w-14 justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-center text-[10px] font-black sm:min-w-16 sm:px-3 sm:text-xs ${statusClass(metric.status)}`}
+                    >
+                      {metric.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="col-span-3 text-center text-xl font-black text-slate-950">
-                  {formatNumber(metric.target, 2)}
-                </div>
-                <div className="col-span-3 text-center text-xl font-black text-slate-400">
-                  {formatNumber(metric.peer, 2)}
-                </div>
-                <div className="col-span-1 text-center">
-                  <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusClass(metric.status)}`}
-                  >
-                    {metric.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

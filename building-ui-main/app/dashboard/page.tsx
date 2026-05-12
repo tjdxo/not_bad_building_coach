@@ -203,7 +203,7 @@ function BarChart({
                 ? "right-0 translate-x-0"
                 : "left-1/2 -translate-x-1/2";
 
-          const showMobileLabel = index % 2 === 0 || index === data.length - 1;
+          const showMobileLabel = index % 2 === 0;
 
           return (
             <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2 overflow-visible">

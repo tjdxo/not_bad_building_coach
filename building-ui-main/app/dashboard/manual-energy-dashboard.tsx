@@ -69,7 +69,7 @@ function MiniBarChart({
                 title={`${row.month}: ${formatNumber(value, 1)} ${unit}`}
               />
               <span className="h-3 text-[9px] font-bold leading-none text-slate-400 sm:text-[10px] md:text-xs">
-                <span className={index % 2 === 0 || index === rows.length - 1 ? "sm:hidden" : "hidden"}>{row.month}</span>
+                <span className={index % 2 === 0 ? "sm:hidden" : "hidden"}>{row.month}</span>
                 <span className="hidden sm:inline">{row.month}</span>
               </span>
             </div>
