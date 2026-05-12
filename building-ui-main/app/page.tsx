@@ -48,27 +48,9 @@ function HeroTitle() {
 export default function Home() {
   const [activeStep, setActiveStep] = useState<number | null>(null);
 
-  function stepCardClass(index: number) {
-    const active = activeStep === index;
-    return `rounded-3xl border p-6 shadow-sm transition ${
-      active
-        ? "border-emerald-400 bg-emerald-50/50 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]"
-        : "border-slate-200 bg-white hover:border-emerald-200"
-    }`;
-  }
-
-  function detailCardClass(index: number) {
-    const active = activeStep === index;
-    return `rounded-3xl border p-7 shadow-sm transition ${
-      active
-        ? "border-emerald-400 bg-emerald-50/50 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]"
-        : "border-slate-200 bg-white hover:border-emerald-200"
-    }`;
-  }
-
   return (
     <main>
-      <section className="relative overflow-hidden bg-white py-20 sm:py-28">
+      <section className="relative overflow-hidden bg-white pt-14 pb-16 sm:pt-20 sm:pb-24">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(60rem_40rem_at_50%_-10%,#d1fae5,transparent)]" />
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid items-stretch gap-12 lg:grid-cols-[1.05fr_0.95fr]">
@@ -81,7 +63,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="mt-9 max-w-2xl rounded-3xl border border-emerald-100 bg-white p-3 shadow-xl sm:mt-12 lg:mt-auto">
+              <div className="mt-8 w-full rounded-3xl border border-emerald-100 bg-white p-3 shadow-xl sm:mt-9 lg:mt-8 lg:max-w-2xl">
                 <div className="rounded-[1.25rem] bg-emerald-50 p-6">
                   <div className="flex flex-col items-center gap-4 text-center">
                     <h2 className="text-2xl font-black tracking-tight text-slate-950">
@@ -101,20 +83,23 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl lg:h-full">
-              <div className="flex h-full flex-col rounded-3xl bg-white/10 p-6">
+            <div className="rounded-[2rem] border border-slate-200 bg-slate-900 p-6 text-white shadow-2xl lg:h-full">
+              <div className="flex h-full flex-col justify-center rounded-3xl bg-white/10 p-6">
                 <h2 className="text-3xl font-black leading-tight">
                   내 건물의 모든 궁금증을
                   <span className="block">해결할 수 있습니다</span>
                 </h2>
-                <div className="mt-8 flex-1 space-y-4">
+                <div className="mt-8">
                   {[
-                    ["01", "나와 비슷한 건물 중 내 건물 에너지 사용량은 몇 등일까?", "용도와 규모가 비슷한 건물군 안에서 내 건물의 상대적 위치를 확인합니다."],
-                    ["02", "지금 에너지 비용을 얼마나 더 아낄 수 있을까?", "전기·가스 사용 패턴과 절감 가능성을 함께 살펴봅니다."],
-                    ["03", "내 건물도 지원사업 혜택을 받을 수 있을까?", "건물 조건과 진단 결과를 바탕으로 검토 가능한 정책·지원사업 후보를 확인합니다."],
-                  ].map(([number, title, desc]) => (
-                    <div key={title} className="flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-sm font-black">
+                    ["Q1.", "나와 비슷한 건물 중 내 건물 에너지 사용량은 몇 등일까?", "용도와 규모가 비슷한 건물군 안에서 내 건물의 상대적 위치를 확인합니다."],
+                    ["Q2.", "지금 에너지 비용을 얼마나 더 아낄 수 있을까?", "전기·가스 사용 패턴과 절감 가능성을 함께 살펴봅니다."],
+                    ["Q3.", "내 건물도 지원사업 혜택을 받을 수 있을까?", "건물 조건과 진단 결과를 바탕으로 검토 가능한 정책·지원사업 후보를 확인합니다."],
+                  ].map(([number, title, desc], index) => (
+                    <div
+                      key={title}
+                      className={`flex gap-4 ${index < 2 ? "mb-5 border-b border-white/10 pb-5" : ""}`}
+                    >
+                      <div className="shrink-0 text-2xl font-black leading-none text-emerald-300">
                         {number}
                       </div>
                       <div>
@@ -123,6 +108,11 @@ export default function Home() {
                       </div>
                     </div>
                   ))}
+                  <div className="mt-6 flex h-[4.5rem] flex-col items-center justify-center text-2xl font-black leading-none text-emerald-300/80" aria-hidden="true">
+                    <span>.</span>
+                    <span>.</span>
+                    <span>.</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -130,52 +120,58 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-slate-50 py-20">
+      <section className="bg-white pb-8">
         <div className="mx-auto max-w-6xl px-6">
+          <div className="border-t border-slate-200 pt-20">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
               서비스 한눈에 보기
             </h2>
           </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-4">
-            {processSteps.map((step, index) => (
+          <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            {processSteps.map((step, index) => {
+              const active = activeStep === index;
+              return (
               <button
                 key={step}
                 type="button"
-                onMouseEnter={() => setActiveStep(index)}
-                onMouseLeave={() => setActiveStep(null)}
                 onClick={() => setActiveStep(activeStep === index ? null : index)}
-                className={`${stepCardClass(index)} text-left`}
+                className="group h-48 [perspective:1000px]"
+                aria-pressed={active}
               >
-                <div className="text-sm font-black text-emerald-600">{index + 1}단계</div>
-                <div className="mt-4 text-xl font-black text-slate-950">{step}</div>
+                <span
+                  className={`relative block h-full rounded-2xl transition duration-500 [transform-style:preserve-3d] ${
+                    active ? "[transform:rotateY(180deg)]" : ""
+                  }`}
+                >
+                  <span className="absolute inset-0 flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm [backface-visibility:hidden] group-hover:border-emerald-200">
+                    <span className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-sm font-black text-emerald-600">
+                      ↻
+                    </span>
+                    <span className="text-sm font-black text-emerald-600">{index + 1}단계</span>
+                    <span className="text-xl font-black text-slate-950">{step}</span>
+                  </span>
+                  <span className="absolute inset-0 flex rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-left shadow-sm [backface-visibility:hidden] [transform:rotateY(180deg)]">
+                    <span className="self-center text-sm font-semibold leading-6 text-slate-700">{valuePoints[index].desc}</span>
+                  </span>
+                </span>
               </button>
-            ))}
+              );
+            })}
           </div>
-          <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {valuePoints.map((point, index) => (
-              <button
-                key={point.title}
-                type="button"
-                onMouseEnter={() => setActiveStep(index)}
-                onMouseLeave={() => setActiveStep(null)}
-                onClick={() => setActiveStep(activeStep === index ? null : index)}
-                className={`${detailCardClass(index)} text-left`}
-                aria-label={point.title}
-              >
-                <p className="text-sm leading-6 text-slate-600">{point.desc}</p>
-              </button>
-            ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-20">
+      <section className="bg-white pt-0 pb-20">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="rounded-[2rem] bg-slate-950 p-8 text-white sm:p-12">
+          <div className="rounded-[2rem] bg-slate-900 p-8 text-white sm:p-12">
             <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <h2 className="text-3xl font-black tracking-tight">탄소 중립, 오늘 우리 건물부터 시작하세요.</h2>
+                <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-300 sm:text-base">
+                  주소만 입력하면 에너지 상태와 개선 방향을 한눈에 확인할 수 있습니다.
+                </p>
               </div>
               <Link
                 href="/search"
