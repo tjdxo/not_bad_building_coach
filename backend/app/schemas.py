@@ -1,10 +1,13 @@
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.security import clean_optional_text, validate_finite_number
 
 
 class ReportRequest(BaseModel):
-    address: str = Field("", description="검색할 도로명 주소 일부")
+    address: str = Field("", description="검색할 도로명 주소 일부", max_length=120)
     building_id: Optional[Any] = None
     plat_plc: Optional[str] = None
     road_address: Optional[str] = None
@@ -12,6 +15,37 @@ class ReportRequest(BaseModel):
     dong_nm: Optional[str] = None
     grs_ar: Optional[float] = None
     agnd_flr: Optional[int] = None
+
+    @field_validator("address", "plat_plc", "road_address", "bld_nm", "dong_nm", mode="before")
+    @classmethod
+    def clean_text_fields(cls, value):
+        if value is None:
+            return value
+        try:
+            return clean_optional_text(value, field_name="검색어")
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+
+    @field_validator("grs_ar", mode="before")
+    @classmethod
+    def validate_area(cls, value):
+        if value is None or value == "":
+            return None
+        try:
+            return validate_finite_number(value, field_name="연면적", maximum=100_000_000)
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+
+    @field_validator("agnd_flr", mode="before")
+    @classmethod
+    def validate_floor(cls, value):
+        if value is None or value == "":
+            return None
+        try:
+            number = validate_finite_number(value, field_name="층수", maximum=300)
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+        return int(number)
 
 
 class BuildingInfo(BaseModel):

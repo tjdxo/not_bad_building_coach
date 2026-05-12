@@ -11,9 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is required. Set it in backend/.env using the Supabase Session Pooler URI."
-    )
+    raise RuntimeError("Database configuration is required.")
 
 
 class Base(DeclarativeBase):

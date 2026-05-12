@@ -778,7 +778,6 @@ export function AiReportPanel({
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
-      console.error(err);
       setError(err instanceof Error ? err.message : "리포트 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       if (requestId === requestIdRef.current) {

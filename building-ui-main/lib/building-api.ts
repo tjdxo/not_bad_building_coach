@@ -602,7 +602,6 @@ export async function createAiReport(params: {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    console.error("AI report API error", payload);
     const detailObject = typeof payload?.detail === "object" && payload.detail !== null ? payload.detail : null;
     const detail =
       typeof payload?.detail === "string"
