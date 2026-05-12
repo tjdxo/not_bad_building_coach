@@ -207,20 +207,24 @@ function BarChart({
 
           return (
             <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center gap-2 overflow-visible">
-              <div className="flex w-full items-end justify-center gap-1 overflow-visible">
+              <button
+                type="button"
+                className="group relative flex w-full items-end justify-center gap-1 overflow-visible rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                aria-label={`${item.tooltipMonth} 대상 건물 ${valueLabel}${showPeer && item.avg !== null ? `, 유사 건물 평균 ${avgLabel}` : ""}`}
+              >
                 {hasPeerData && (
                   <div
                     className={`energy-bar-rise w-2 rounded-t ${item.avg === null ? "bg-transparent" : "bg-slate-200"}`}
                     style={{ height: `${(avg / maxValue) * 160}px` }}
                   />
                 )}
-                <div className="group relative flex items-end justify-center overflow-visible">
+                <div className="relative flex items-end justify-center overflow-visible">
                   <div
                     className={`energy-bar-rise w-3 rounded-t ${colorClass}`}
                     style={{ height: `${(value / maxValue) * 160}px` }}
                   />
                   <div
-                    className={`pointer-events-none absolute bottom-full z-50 mb-3 hidden w-48 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-2xl ring-1 ring-white/10 group-hover:block ${tooltipPosition}`}
+                    className={`pointer-events-none absolute bottom-full z-50 mb-3 hidden w-48 rounded-xl bg-slate-950 px-3 py-2 text-left text-[11px] font-bold leading-5 text-white shadow-2xl ring-1 ring-white/10 group-hover:block group-focus:block group-focus-visible:block ${tooltipPosition}`}
                   >
                     <div className="font-black">{item.tooltipMonth}</div>
                     <div>
@@ -230,7 +234,7 @@ function BarChart({
                     {showPeer && item.avg !== null && <div>유사 건물 평균: {avgLabel}</div>}
                   </div>
                 </div>
-              </div>
+              </button>
               <span className="h-3 text-[9px] font-bold leading-none text-slate-400 sm:text-[10px] md:text-xs">
                 <span className={showMobileLabel ? "sm:hidden" : "hidden"}>{item.month}</span>
                 <span className="hidden sm:inline">{item.month}</span>
