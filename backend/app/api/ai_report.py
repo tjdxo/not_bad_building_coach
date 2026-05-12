@@ -7,11 +7,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.security import MAX_USER_ANSWERS_JSON_CHARS, sanitize_user_answers, validate_positive_int
 from app.services.ai_report.provider import (
     AiReportProviderError,
     generate_ai_report_text,
@@ -78,49 +77,6 @@ class AiReportRequest(BaseModel):
     report_audience: Optional[str] = "building_owner"
     user_answers: Optional[Dict[str, Any]] = None
     dry_run: Optional[bool] = False
-
-    @field_validator("building_id", mode="before")
-    @classmethod
-    def validate_building_id(cls, value):
-        if value is None or value == "":
-            return None
-        try:
-            return validate_positive_int(value, field_name="building_id")
-        except HTTPException as exc:
-            raise ValueError(str(exc.detail)) from exc
-
-    @field_validator("report_type")
-    @classmethod
-    def validate_report_type(cls, value):
-        if value not in {"basic", "detailed", None}:
-            raise ValueError("지원하지 않는 리포트 유형입니다.")
-        return value or "basic"
-
-    @field_validator("report_audience")
-    @classmethod
-    def validate_report_audience(cls, value):
-        allowed = {"building_owner", "facility_manager", "contractor", "policy_reviewer", None}
-        if value not in allowed:
-            raise ValueError("지원하지 않는 리포트 관점입니다.")
-        return value or "building_owner"
-
-    @field_validator("user_answers", mode="before")
-    @classmethod
-    def validate_user_answers(cls, value):
-        if value is None:
-            return None
-        if len(json.dumps(value, ensure_ascii=False, default=str)) > MAX_USER_ANSWERS_JSON_CHARS:
-            raise ValueError("추가 입력이 너무 깁니다.")
-        try:
-            return sanitize_user_answers(value)
-        except HTTPException as exc:
-            raise ValueError(str(exc.detail)) from exc
-
-    @model_validator(mode="after")
-    def validate_dry_run_access(self):
-        if self.dry_run and os.getenv("AI_REPORT_DRY_RUN_ENABLED", "").strip().lower() not in {"1", "true", "yes", "on"}:
-            raise ValueError("dry_run은 현재 사용할 수 없습니다.")
-        return self
 
 
 def _json_string(value: Any) -> str:

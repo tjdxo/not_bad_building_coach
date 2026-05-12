@@ -1,11 +1,7 @@
-import os
-import threading
-import time
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Union
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -20,61 +16,22 @@ app = FastAPI(
     description="서울 건물 에너지 진단 서비스용 FastAPI 백엔드 스타터 프로젝트",
 )
 
-def _allowed_origins() -> List[str]:
-    raw_value = os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,https://not-bad-building-coach.vercel.app",
-    )
-    return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
-
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins(),
-    allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX", r"https://not-bad-building-coach.*\.vercel\.app"),
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://not-bad-building-coach.vercel.app",
+    ],
+    allow_origin_regex=r"https://not-bad-building-coach.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-_rate_limit_lock = threading.Lock()
-_request_times_by_ip: Dict[str, List[float]] = {}
-
-
-def _client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()[:64]
-    return request.client.host if request.client else "unknown"
-
-
-@app.middleware("http")
-async def basic_rate_limit(request: Request, call_next):
-    if request.url.path.startswith("/api/") and request.method in {"GET", "POST"}:
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                if int(content_length) > int(os.getenv("MAX_API_BODY_BYTES", "1048576")):
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": "요청 본문이 너무 큽니다."},
-                    )
-            except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "요청 헤더가 올바르지 않습니다."})
-        now = time.time()
-        client_ip = _client_ip(request)
-        limit = 3 if request.url.path == "/api/ai-report" else 60
-        window = 60.0
-        with _rate_limit_lock:
-            recent_times = [item for item in _request_times_by_ip.get(client_ip, []) if now - item < window]
-            if len(recent_times) >= limit:
-                return JSONResponse(
-                    status_code=429,
-                    content={"detail": "요청이 잠시 많습니다. 잠시 후 다시 시도해주세요."},
-                )
-            recent_times.append(now)
-            _request_times_by_ip[client_ip] = recent_times
-    return await call_next(request)
 
 app.include_router(report_router, prefix="/api")
 app.include_router(ai_report_router, prefix="/api")
@@ -94,7 +51,7 @@ def db_health() -> Dict[str, Union[int, str]]:
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500,
-            detail="데이터베이스 연결에 실패했습니다.",
+            detail="데이터베이스 연결에 실패했습니다. backend/.env의 Supabase Session Pooler DATABASE_URL을 확인해주세요.",
         ) from exc
     return {"db": "connected", "result": result}
 
@@ -308,8 +265,8 @@ def demo_page():
           <h2 class="block-title">원본 JSON 응답</h2>
           <pre id="json-output">{}</pre>
           <div class="footer-links">
-            <a href="/docs" target="_blank" rel="noopener noreferrer">Swagger Docs</a>
-            <a href="/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI JSON</a>
+            <a href="/docs" target="_blank" rel="noreferrer">Swagger Docs</a>
+            <a href="/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
           </div>
         </section>
       </div>
@@ -323,25 +280,16 @@ def demo_page():
         const reportText = document.getElementById("report-text");
         const jsonOutput = document.getElementById("json-output");
 
-        function escapeHtml(value) {
-          return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-        }
-
         function renderSummary(data) {
           summary.innerHTML = `
-            <div class="stat-row"><span class="label">건물명</span><span class="value">${escapeHtml(data.building.name)}</span></div>
-            <div class="stat-row"><span class="label">주소</span><span class="value">${escapeHtml(data.building.road_address)}</span></div>
-            <div class="stat-row"><span class="label">건물 유형</span><span class="value">${escapeHtml(data.building.building_type)}</span></div>
-            <div class="stat-row"><span class="label">Peer 수</span><span class="value">${escapeHtml(data.analysis.peer_count)}</span></div>
-            <div class="stat-row"><span class="label">전기 비율</span><span class="value">${escapeHtml(data.energy_summary.electricity_ratio)}</span></div>
-            <div class="stat-row"><span class="label">가스 비율</span><span class="value">${escapeHtml(data.energy_summary.gas_ratio)}</span></div>
-            <div class="stat-row"><span class="label">낭비 지수</span><span class="value">${escapeHtml(data.analysis.energy_waste_index)}</span></div>
-            <div class="stat-row"><span class="label">등급</span><span class="value">${escapeHtml(data.analysis.grade)}</span></div>
+            <div class="stat-row"><span class="label">건물명</span><span class="value">${data.building.name}</span></div>
+            <div class="stat-row"><span class="label">주소</span><span class="value">${data.building.road_address}</span></div>
+            <div class="stat-row"><span class="label">건물 유형</span><span class="value">${data.building.building_type}</span></div>
+            <div class="stat-row"><span class="label">Peer 수</span><span class="value">${data.analysis.peer_count}</span></div>
+            <div class="stat-row"><span class="label">전기 비율</span><span class="value">${data.energy_summary.electricity_ratio}</span></div>
+            <div class="stat-row"><span class="label">가스 비율</span><span class="value">${data.energy_summary.gas_ratio}</span></div>
+            <div class="stat-row"><span class="label">낭비 지수</span><span class="value">${data.analysis.energy_waste_index}</span></div>
+            <div class="stat-row"><span class="label">등급</span><span class="value">${data.analysis.grade}</span></div>
           `;
         }
 

@@ -49,6 +49,7 @@ function isAbortError(error: unknown) {
 }
 
 function friendlySearchError(error: unknown) {
+  console.error(error);
   if (error instanceof TypeError && error.message.toLowerCase().includes("fetch")) {
     return "서버와 연결하지 못했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.";
   }
@@ -271,7 +272,8 @@ export default function SearchPage() {
         return;
       }
       router.push(dashboardHrefForBuilding(selectedBuilding));
-    } catch {
+    } catch (err: unknown) {
+      console.error(err);
       setError("진단 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setReportLoading(false);

@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.db import get_db
-from app.security import clean_text, validate_positive_int
 from app.services.analysis import (
     build_analysis_json,
     calculate_energy_waste_index,
@@ -800,9 +799,6 @@ def build_monthly_energy(
 
 @router.post("/report", response_model=schemas.ReportResponse)
 def create_report(request: schemas.ReportRequest, db: Session = Depends(get_db)) -> schemas.ReportResponse:
-    if request.building_id not in (None, "", 0, "0"):
-        request.building_id = validate_positive_int(request.building_id, field_name="building_id")
-    request.address = clean_text(request.address, field_name="address") if request.address else ""
     if request.building_id:
         building_item = crud.get_building_master_by_id(db, request.building_id)
         if not building_item:
