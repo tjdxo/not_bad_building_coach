@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import {
   createAiReport,
+  isIncheonReport,
   type AiGeneratedReport,
   type AiReportApiResponse,
   type AiReportAudience,
@@ -255,6 +256,22 @@ function sectionHtml(title: string, body: string) {
   return `<section class="card"><h2>${escapeHtml(title)}</h2>${body}</section>`;
 }
 
+function aiPayloadIsIncheon(payload: AiReportApiResponse) {
+  return String(payload.report_context?.region || "").trim() === "incheon";
+}
+
+function emptyPolicyMessage(isIncheon: boolean) {
+  return isIncheon
+    ? "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 표시하지 않습니다. 인천 지원사업 데이터가 연결되기 전까지 정책 추천은 비워둡니다."
+    : "현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.";
+}
+
+function policyCautionMessage(isIncheon: boolean) {
+  return isIncheon
+    ? "인천 지원사업 데이터가 연결되기 전까지 정책 추천은 표시하지 않습니다."
+    : "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다.";
+}
+
 function buildPrintableReportHtml(payload: AiReportApiResponse) {
   const report = payload.report;
   if (!report && payload.raw_text) {
@@ -270,6 +287,7 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
   const hypotheses = report?.cause_hypotheses ?? [];
   const risks = report?.risk_scenarios ?? [];
   const policies = report?.policy_recommendations ?? [];
+  const isIncheon = aiPayloadIsIncheon(payload);
   return `<!doctype html>
 <html lang="ko">
 <head><meta charset="utf-8" /><title>${escapeHtml(report?.title || "건물 에너지 AI 진단 리포트")}</title>${printStyleHtml()}</head>
@@ -361,12 +379,12 @@ function buildPrintableReportHtml(payload: AiReportApiResponse) {
               (policy) => `<article class="item"><h3>${escapeHtml(policy.policy_name || "정책 후보")}</h3><p class="tag">${escapeHtml(policy.category || "")} · ${escapeHtml(policy.benefit_type || "")} · 정책 적합도 ${escapeHtml(policy.fit_score || "-")}점 · ${escapeHtml(policy.fit_label || "검토 가능")}</p><h4>추천 이유</h4>${listHtml(policy.matched_reasons)}<h4>추가 확인 필요</h4>${listHtml(policy.missing_checks)}<p>${escapeHtml(policy.recommended_next_step || "")}</p>${officialPolicyUrl(policy) ? `<p><strong>공식 안내:</strong> ${escapeHtml(officialPolicyUrl(policy))}</p>` : ""}<p class="caution">${escapeHtml(policy.caution || "정확한 신청 가능 여부는 관련 기관 확인이 필요합니다.")}</p></article>`,
             )
             .join("")
-        : '<p class="muted">현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.</p>',
+        : `<p class="muted">${escapeHtml(emptyPolicyMessage(isIncheon))}</p>`,
     )}
 
     ${sectionHtml(
       "사용자 입력 반영 및 주의사항",
-      `<p>${escapeHtml(report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다.")}</p>${listHtml([...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? []), "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다."])}`,
+      `<p>${escapeHtml(report?.user_answer_reflection?.summary || "추가 입력이 없는 경우 DB 데이터만으로 리포트를 생성했습니다.")}</p>${listHtml([...(report?.user_answer_reflection?.important_answers ?? []), ...(report?.limitations ?? []), policyCautionMessage(isIncheon)])}`,
     )}
   </main>
 </body>
@@ -464,6 +482,7 @@ function EnergyReportCard({
 function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
   const report = sanitizeReportValue(payload.report);
   const rawText = sanitizeDisplayText(payload.raw_text);
+  const isIncheon = aiPayloadIsIncheon(payload);
 
   if (!report && rawText) {
     return (
@@ -599,7 +618,7 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
           <div className="space-y-3">
             {(report?.policy_recommendations ?? []).length === 0 && (
               <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
-                현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.
+                {emptyPolicyMessage(isIncheon)}
               </p>
             )}
             {(report?.policy_recommendations ?? []).map((policy, index) => (
@@ -648,7 +667,7 @@ function GeneratedReportView({ payload }: { payload: AiReportApiResponse }) {
             items={[
               ...(report?.user_answer_reflection?.important_answers ?? []),
               ...(report?.limitations ?? []),
-              "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다.",
+              policyCautionMessage(isIncheon),
             ]}
           />
         </div>
@@ -670,6 +689,7 @@ export function AiReportPanel({
   buttonLabel?: string;
 }) {
   const buildingId = hasBuildingId(report);
+  const incheonReport = isIncheonReport(report);
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [step, setStep] = useState<"choice" | "electric" | "gas" | "policy" | "review" | "result">("choice");
   const [electricAnswers, setElectricAnswers] = useState<Record<string, string | string[]>>({});
@@ -687,9 +707,9 @@ export function AiReportPanel({
     () => ({
       electric: electricAnswers,
       gas: gasAnswers,
-      policy: policyAnswers,
+      policy: incheonReport ? {} : policyAnswers,
     }),
-    [electricAnswers, gasAnswers, policyAnswers],
+    [electricAnswers, gasAnswers, incheonReport, policyAnswers],
   );
 
   function setAnswer(section: "electric" | "gas" | "policy", question: ChoiceQuestion, option: string) {
@@ -970,14 +990,14 @@ export function AiReportPanel({
                   <button type="button" onClick={() => setStep("electric")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
                     이전
                   </button>
-                  <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
+                  <button type="button" onClick={() => setStep(incheonReport ? "review" : "policy")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
                     다음
                   </button>
                 </div>
               </div>
             )}
 
-            {step === "policy" && (
+            {!incheonReport && step === "policy" && (
               <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
                 <div className="mb-5">
                   <p className="text-sm font-black text-emerald-600">Step 3</p>
@@ -1005,13 +1025,15 @@ export function AiReportPanel({
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   선택하지 않은 항목은 모름으로 해석하지 않고, 리포트에서 데이터 부족으로 다룹니다.
                 </p>
-                <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <div className={`mt-5 grid gap-4 ${incheonReport ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
                   <AnswerSummarySection title="전기 사용 패턴" questions={electricQuestions} answers={electricAnswers} />
                   <AnswerSummarySection title="가스/난방 사용 패턴" questions={gasQuestions} answers={gasAnswers} />
-                  <AnswerSummarySection title="정책 매칭 정보" questions={policyQuestions} answers={policyAnswers} />
+                  {!incheonReport && (
+                    <AnswerSummarySection title="정책 매칭 정보" questions={policyQuestions} answers={policyAnswers} />
+                  )}
                 </div>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
-                  <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
+                  <button type="button" onClick={() => setStep(incheonReport ? "gas" : "policy")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
                     이전
                   </button>
                   <button

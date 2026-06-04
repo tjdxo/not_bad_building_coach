@@ -12,6 +12,7 @@ router = APIRouter(tags=["buildings"])
 
 @router.get("/buildings", response_model=schemas.BuildingSearchResponse)
 def search_buildings(
+    region: Optional[str] = Query(default=None),
     district: Optional[str] = Query(default=None),
     dong: Optional[str] = Query(default=None),
     query: Optional[str] = Query(default=None),
@@ -28,6 +29,7 @@ def search_buildings(
             dong=dong,
             query=query,
             building_keyword=building_keyword or building_keyword_camel,
+            region=region,
             page=page,
             limit=limit,
         )
@@ -44,9 +46,12 @@ def search_buildings(
 
 
 @router.get("/districts", response_model=schemas.StringItemsResponse)
-def get_districts(db: Session = Depends(get_db)) -> schemas.StringItemsResponse:
+def get_districts(
+    region: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+) -> schemas.StringItemsResponse:
     try:
-        return schemas.StringItemsResponse(items=crud.get_building_master_districts(db))
+        return schemas.StringItemsResponse(items=crud.get_building_master_districts(db, region=region))
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500,
@@ -57,10 +62,11 @@ def get_districts(db: Session = Depends(get_db)) -> schemas.StringItemsResponse:
 @router.get("/dongs", response_model=schemas.StringItemsResponse)
 def get_dongs(
     district: str = Query(..., min_length=1),
+    region: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
 ) -> schemas.StringItemsResponse:
     try:
-        return schemas.StringItemsResponse(items=crud.get_building_master_dongs(db, district=district))
+        return schemas.StringItemsResponse(items=crud.get_building_master_dongs(db, district=district, region=region))
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500,

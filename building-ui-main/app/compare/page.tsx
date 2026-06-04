@@ -7,6 +7,8 @@ import {
   formatNumber,
   formatRatioGap,
   getMonthlyEnergy,
+  isIncheonReport,
+  peerBasisLabel,
   resolveAddressParam,
   type ReportApiResponse,
 } from "@/lib/building-api";
@@ -185,6 +187,8 @@ export default async function ComparePage({
     road_address?: string;
     bld_nm?: string;
     dong_nm?: string;
+    purp_nm?: string;
+    main_purpose?: string;
     grs_ar?: string;
     agnd_flr?: string;
   }>;
@@ -228,6 +232,8 @@ export default async function ComparePage({
           road_address: params.road_address,
           bld_nm: params.bld_nm,
           dong_nm: params.dong_nm,
+          purp_nm: params.purp_nm,
+          main_purpose: params.main_purpose,
           grs_ar: params.grs_ar,
           agnd_flr: params.agnd_flr,
         })
@@ -259,6 +265,8 @@ export default async function ComparePage({
   }
 
   const building = report.building;
+  const incheon = isIncheonReport(report);
+  const basisLabel = peerBasisLabel(report);
   const comparisonMetrics = buildComparisonMetrics(report);
   const peerBenchmark = report.peer_benchmark;
   const peerRankLabel = clampedPeerRankLabel(
@@ -270,7 +278,7 @@ export default async function ComparePage({
     ["유사군 순위", peerRankLabel],
     ["유사군 수", peerBenchmark?.peer_count ? `${formatNumber(peerBenchmark.peer_count)}개` : "산정 불가"],
     ["상대 등급", peerBenchmark?.relative_grade?.grade || "산정 불가"],
-    ["절대 등급", peerBenchmark?.absolute_grade?.grade || "산정 불가"],
+    ["절대 등급", incheon ? "공식 등급 미산정" : peerBenchmark?.absolute_grade?.grade || "산정 불가"],
     ["신뢰도", peerBenchmark?.reliability_label || "산정 불가"],
   ];
 
@@ -282,7 +290,7 @@ export default async function ComparePage({
             <p className="text-sm font-black tracking-[0.25em] text-emerald-600">유사 건물 비교</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">유사 건물 상세 비교</h1>
             <p className="mt-3 text-slate-600">
-              {building.name}와 {peerBenchmark?.has_data ? "매핑된 유사군" : `서울권 ${formatBuildingType(building.building_type)}`} 평균 데이터를 비교합니다.
+              {building.name}와 {peerBenchmark?.has_data ? basisLabel : incheon ? "인천시 내 유사 건물군 기준" : `서울권 ${formatBuildingType(building.building_type)}`} 평균 데이터를 비교합니다.
             </p>
           </div>
           <Link

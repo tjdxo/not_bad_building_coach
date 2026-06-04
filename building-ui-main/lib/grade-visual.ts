@@ -39,6 +39,7 @@ const EXCLUDED_ABSOLUTE_STATUSES = new Set([
   "excluded_residential",
   "under_3000_out_of_scope",
   "excluded",
+  "official_not_assessed",
   "산정 예정",
   "적용 제외",
 ]);
@@ -55,6 +56,9 @@ function hasExcludedAbsoluteStatus(value?: string | null) {
 }
 
 function absoluteMissingDescription(status?: string | null) {
+  if (String(status ?? "").trim() === "official_not_assessed") {
+    return "공식 인천 건물 에너지 절대등급은 확인되지 않아, 유사건물 비교 기반의 참고등급과 상대등급을 함께 확인해 주세요.";
+  }
   if (hasExcludedAbsoluteStatus(status)) {
     return "서울시 절대등급 적용 대상이 아니거나, 현재 기준에서 공식 절대등급을 산정하지 않는 건물입니다.";
   }

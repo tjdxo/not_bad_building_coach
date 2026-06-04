@@ -168,12 +168,42 @@ def report_mode_from_data(usage_rows: List[Dict[str, Any]], ai_estimate: Dict[st
     return "no_data"
 
 
-def build_peer_context(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def relative_grade_from_percentile(percentile: Optional[float]) -> Optional[str]:
+    if percentile is None:
+        return None
+    if percentile <= 20:
+        return "A"
+    if percentile <= 40:
+        return "B"
+    if percentile <= 60:
+        return "C"
+    if percentile <= 80:
+        return "D"
+    return "E"
+
+
+def peer_basis_label(region: str) -> str:
+    if region == "incheon":
+        return "인천시 내 유사 건물군 기준"
+    if region == "seoul":
+        return "서울시 내 유사 건물군 기준"
+    return "동일 지역 내 유사 건물군 기준"
+
+
+def build_peer_context(row: Optional[Dict[str, Any]], region: str = "seoul") -> Dict[str, Any]:
     if not row:
-        return {"has_data": False}
+        return {
+            "has_data": False,
+            "region": region,
+            "region_name": crud.get_region_name(region),
+            "peer_basis_label": peer_basis_label(region),
+        }
 
     return {
         "has_data": True,
+        "region": region,
+        "region_name": crud.get_region_name(region),
+        "peer_basis_label": peer_basis_label(region),
         "peer_count": safe_int(row.get("peer_count")),
         "peer_total_rank": safe_int(row.get("peer_total_rank")),
         "reliability_score": safe_float(row.get("reliability_score")),
@@ -188,9 +218,21 @@ def build_peer_context(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_grade_context(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def build_grade_context(row: Optional[Dict[str, Any]], region: str = "seoul") -> Dict[str, Any]:
+    if region == "incheon":
+        return {
+            "absolute_grade": None,
+            "absolute_grade_status": "official_not_assessed",
+            "absolute_grade_type": None,
+            "absolute_energy_intensity": None,
+            "relative_grade": relative_grade_from_percentile(safe_float((row or {}).get("total_percentile"))),
+            "relative_grade_basis": "인천시 내 유사 건물군 기준",
+            "basis_caution": "공식 인천 건물 에너지 절대등급은 확인되지 않아, 본 서비스에서는 공공데이터와 유사건물 비교 기반의 참고등급 및 상대등급을 제공합니다.",
+        }
     if not row:
-        return {}
+        return {
+            "basis_caution": "공식 등급 또는 법적 효력을 갖는 인증 결과가 아니라 참고용 진단 결과입니다.",
+        }
     return {
         "absolute_grade": safe_string(row.get("absolute_grade")),
         "absolute_grade_status": safe_string(row.get("absolute_grade_status")),
@@ -199,6 +241,7 @@ def build_grade_context(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "absolute_energy_intensity": safe_float(row.get("absolute_energy_intensity")),
         "relative_grade": safe_string(row.get("relative_grade_by_seoul_percentile"))
         or safe_string(row.get("appendix1_proxy_grade_by_current_peer_percentile")),
+        "relative_grade_basis": "서울시 내 유사 건물군 기준",
         "basis_caution": "서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아니라 참고용 진단 결과입니다.",
     }
 
@@ -213,10 +256,12 @@ def build_ai_report_context(
     if not building:
         return None, "not_found"
 
+    region = crud.detect_region_from_building(building)
+    region_name = crud.get_region_name(region)
     usage_rows = crud.get_energy_usage_for_master_building(db, building_id)
-    peer_row = crud.get_peer_benchmark_for_master_building(db, building_id)
-    electric_row = crud.get_electric_energy_service_lite_for_building(db, building_id)
-    gas_row = crud.get_gas_energy_service_lite_for_building(db, building_id)
+    peer_row = crud.get_peer_benchmark_for_master_building(db, building_id, region=region)
+    electric_row = crud.get_electric_energy_service_lite_for_building(db, building_id, region=region)
+    gas_row = crud.get_gas_energy_service_lite_for_building(db, building_id, region=region)
     ai_estimate = build_ai_estimate(electric_row, gas_row)
     report_mode = report_mode_from_data(usage_rows, ai_estimate)
     energy_context = measured_energy_summary(usage_rows)
@@ -231,6 +276,8 @@ def build_ai_report_context(
     context = {
         "building": {
             "building_id": building.get("building_id"),
+            "region": region,
+            "region_name": region_name,
             "address": building.get("display_address"),
             "road_address": building.get("road_address"),
             "jibun_address": building.get("plat_plc"),
@@ -244,17 +291,33 @@ def build_ai_report_context(
             "is_district_heating": safe_bool(building.get("is_district_heating")),
         },
         "report_mode": report_mode,
+        "region": region,
+        "region_name": region_name,
         "report_audience": report_audience,
         "energy": energy_context,
-        "peer_benchmark": build_peer_context(peer_row),
-        "grades": build_grade_context(peer_row),
+        "peer_benchmark": build_peer_context(peer_row, region),
+        "grades": build_grade_context(peer_row, region),
         "ai_estimate": ai_estimate,
         "saving_estimate": saving_estimate,
         "user_answers": user_answers or {},
         "contractor_categories": CONTRACTOR_CATEGORIES,
         "report_rules": {
             "legal_effect": "본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.",
-            "official_grade_caution": "서울시 공식 등급, 인증, 지원사업 선정 결과를 의미하지 않습니다.",
+            "official_grade_caution": (
+                "인천 공식 절대등급, 인증, 지원사업 선정 결과를 의미하지 않습니다."
+                if region == "incheon"
+                else "서울시 공식 등급, 인증, 지원사업 선정 결과를 의미하지 않습니다."
+            ),
+            "regional_basis": (
+                "인천광역시 건물 공공데이터와 동일 지역 내 유사 건물군 비교를 기반으로 한 참고용 결과입니다."
+                if region == "incheon"
+                else "서울시 건물 공공데이터와 서울시 내 유사 건물군 비교를 기반으로 한 참고용 결과입니다."
+            ),
+            "policy_basis": (
+                "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 정책 추천을 비워둡니다."
+                if region == "incheon"
+                else "서울시 및 전국 공통 에너지 지원사업 기준으로 표현합니다."
+            ),
         },
     }
     context.update(

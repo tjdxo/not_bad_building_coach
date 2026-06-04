@@ -1,4 +1,4 @@
-import type { ReportApiResponse } from "@/lib/building-api";
+import { isIncheonReport, type ReportApiResponse } from "@/lib/building-api";
 import type { PolicyRecommendation } from "@/lib/policy-recommendations";
 
 export type ContractorRecommendation = {
@@ -228,6 +228,14 @@ function addDiagnosisBasedRecommendations(target: ContractorRecommendation[], re
   }
 }
 
+function withoutSeoulPolicyLabels(recommendations: ContractorRecommendation[]) {
+  return recommendations.map((item) => ({
+    ...item,
+    name: item.name === "서울 LED 리뉴얼" ? "LED 조명 리뉴얼" : item.name,
+    relatedPolicy: "인천 지원사업 데이터 연결 전",
+  }));
+}
+
 export function buildContractorRecommendations(
   report: ReportApiResponse,
   policyRecommendations: PolicyRecommendation[] = [],
@@ -243,5 +251,6 @@ export function buildContractorRecommendations(
 
   ["window", "led", "bems"].forEach((key) => addRecommendation(recommendations, CONTRACTORS[key]));
 
-  return recommendations.slice(0, 3);
+  const sliced = recommendations.slice(0, 3);
+  return isIncheonReport(report) ? withoutSeoulPolicyLabels(sliced) : sliced;
 }

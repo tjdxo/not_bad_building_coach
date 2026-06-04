@@ -1,7 +1,7 @@
 "use client";
 
 import { Children, type ReactNode, useEffect, useState } from "react";
-import type { ReportApiResponse } from "@/lib/building-api";
+import { isIncheonReport, type ReportApiResponse } from "@/lib/building-api";
 
 function premiumUnlockStorageKey(report: ReportApiResponse) {
   const building = report.building;
@@ -98,7 +98,8 @@ function LockedDetailAnalysis({
   onUnlock: () => void;
 }) {
   const maskedSaving = formatMaskedSaving(report.saving_estimate?.total?.saving_krw);
-  const hasPolicyHint = (report.raw_analysis_json?.policy_matches as unknown[] | undefined)?.length;
+  const incheonReport = isIncheonReport(report);
+  const hasPolicyHint = !incheonReport && (report.raw_analysis_json?.policy_matches as unknown[] | undefined)?.length;
 
   return (
     <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -108,7 +109,7 @@ function LockedDetailAnalysis({
           <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">상세 분석</h2>
           <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-slate-600">
             상세 분석과 AI 리포트는 결제 후 확인할 수 있습니다. 유사군 대비 소비 지표, 상위권 기준 예상 절약액,
-            지원사업 검토 가능성, AI 리포트와 PDF까지 한 번에 확인할 수 있습니다.
+            {incheonReport ? " AI 리포트와 PDF까지 한 번에 확인할 수 있습니다." : " 지원사업 검토 가능성, AI 리포트와 PDF까지 한 번에 확인할 수 있습니다."}
           </p>
         </div>
         <button
@@ -143,9 +144,11 @@ function LockedDetailAnalysis({
           </div>
         </LockedPreviewCard>
         <LockedPreviewCard
-          title="정책 매칭과 AI 실행 액션"
+          title={incheonReport ? "AI 실행 액션" : "정책 매칭과 AI 실행 액션"}
           teaser={
-            hasPolicyHint
+            incheonReport
+              ? "인천 지원사업 데이터가 연결되기 전까지 정책 추천은 표시하지 않고, 실행 우선순위 중심으로 확인할 수 있습니다."
+              : hasPolicyHint
               ? "이 건물에 적용 가능성이 있는 지원사업과 실행 우선순위를 확인할 수 있습니다."
               : "지원사업 검토 가능성과 신청 전 확인사항을 볼 수 있습니다."
           }

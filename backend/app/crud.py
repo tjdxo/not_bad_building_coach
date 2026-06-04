@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from sqlalchemy import func, inspect, or_, select, text
 from sqlalchemy.orm import Session
@@ -17,6 +17,31 @@ _building_master_id_column: Optional[str] = None
 _building_master_id_column_checked = False
 _building_master_columns: Optional[set] = None
 
+Region = Literal["seoul", "incheon"]
+
+REGION_NAMES: Dict[Region, str] = {
+    "seoul": "서울특별시",
+    "incheon": "인천광역시",
+}
+
+REGION_PREFIXES: Dict[Region, str] = {
+    "seoul": "서울특별시",
+    "incheon": "인천광역시",
+}
+
+REGION_TABLES: Dict[Region, Dict[str, str]] = {
+    "seoul": {
+        "electric": "electric_energy_service_lite",
+        "gas": "gas_energy_service_lite",
+        "peer": "building_peer_benchmark",
+    },
+    "incheon": {
+        "electric": "electric_energy_service_lite_incheon",
+        "gas": "gas_energy_service_lite_incheon",
+        "peer": "peer_benchmark_results_incheon",
+    },
+}
+
 
 def _dedupe_strings(values: List[str]) -> List[str]:
     seen = set()
@@ -27,6 +52,64 @@ def _dedupe_strings(values: List[str]) -> List[str]:
             seen.add(normalized)
             result.append(normalized)
     return result
+
+
+def _clean_admin_names(values: List[str]) -> List[str]:
+    return _dedupe_strings([value for value in values if "�" not in value])
+
+
+def detect_region_from_building(building: Optional[Dict[str, Any]]) -> Region:
+    if not building:
+        return "seoul"
+
+    values = [
+        str(building.get("sgg_cd_nm") or "").strip(),
+        str(building.get("road_address") or "").strip(),
+        str(building.get("plat_plc") or "").strip(),
+        str(building.get("display_address") or "").strip(),
+    ]
+    if any(value.startswith("인천광역시") for value in values):
+        return "incheon"
+    if any(value.startswith("서울특별시") for value in values):
+        return "seoul"
+
+    joined = " ".join(values)
+    if "인천광역시" in joined:
+        return "incheon"
+    if "서울특별시" in joined:
+        return "seoul"
+    return "seoul"
+
+
+def get_region_name(region: str) -> str:
+    return REGION_NAMES.get(_normalize_region(region), REGION_NAMES["seoul"])
+
+
+def attach_region_fields(building: Dict[str, Any]) -> Dict[str, Any]:
+    region = detect_region_from_building(building)
+    building["region"] = region
+    building["region_name"] = REGION_NAMES[region]
+    return building
+
+
+def _normalize_region(region: Optional[str]) -> Region:
+    value = str(region or "").strip()
+    if value in {"incheon", "인천", "인천광역시"}:
+        return "incheon"
+    return "seoul"
+
+
+def normalize_region_filter(region: Optional[str]) -> Optional[Region]:
+    value = str(region or "").strip()
+    if value in {"seoul", "서울", "서울특별시"}:
+        return "seoul"
+    if value in {"incheon", "인천", "인천광역시"}:
+        return "incheon"
+    return None
+
+
+def _region_table(region: Optional[str], table_key: str) -> str:
+    return REGION_TABLES[_normalize_region(region)][table_key]
 
 
 def _expand_building_keyword_terms(keyword: str) -> List[str]:
@@ -129,6 +212,7 @@ def search_building_master(
     district: Optional[str] = None,
     dong: Optional[str] = None,
     building_keyword: Optional[str] = None,
+    region: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
 ) -> Dict[str, Any]:
@@ -136,8 +220,9 @@ def search_building_master(
     district_value = district.strip() if district else ""
     dong_value = dong.strip() if dong else ""
     building_keyword_value = building_keyword.strip() if building_keyword else ""
+    region_value = normalize_region_filter(region)
 
-    if not keyword and not district_value and not dong_value and not building_keyword_value:
+    if not keyword and not district_value and not dong_value and not building_keyword_value and not region_value:
         return {
             "items": [],
             "page": page,
@@ -160,6 +245,16 @@ def search_building_master(
         "offset": offset,
     }
 
+    if region_value:
+        where_parts.append("""
+            (
+              sgg_cd_nm ILIKE :region_prefix
+              OR road_address ILIKE :region_prefix
+              OR plat_plc ILIKE :region_prefix
+            )
+        """)
+        params["region_prefix"] = f"{REGION_PREFIXES[region_value]}%"
+
     if district_value:
         where_parts.append("sgg_cd_nm = :district")
         params["district"] = district_value
@@ -173,8 +268,16 @@ def search_building_master(
             (
               plat_plc ILIKE :search
               OR road_address ILIKE :search
+              OR sgg_cd_nm ILIKE :search
+              OR bjd_cd_nm ILIKE :search
+              OR COALESCE(bld_nm, '') ILIKE :search
+              OR COALESCE(dong_nm, '') ILIKE :search
               OR REPLACE(plat_plc, ' ', '') ILIKE :normalized_search
               OR REPLACE(road_address, ' ', '') ILIKE :normalized_search
+              OR REPLACE(COALESCE(sgg_cd_nm, ''), ' ', '') ILIKE :normalized_search
+              OR REPLACE(COALESCE(bjd_cd_nm, ''), ' ', '') ILIKE :normalized_search
+              OR REPLACE(COALESCE(bld_nm, ''), ' ', '') ILIKE :normalized_search
+              OR REPLACE(COALESCE(dong_nm, ''), ' ', '') ILIKE :normalized_search
             )
         """)
         params["search"] = f"%{keyword}%"
@@ -203,7 +306,11 @@ def search_building_master(
           CASE
             WHEN road_address ILIKE :prefix THEN 0
             WHEN plat_plc ILIKE :prefix THEN 1
-            ELSE 2
+            WHEN sgg_cd_nm ILIKE :prefix THEN 2
+            WHEN bjd_cd_nm ILIKE :prefix THEN 3
+            WHEN COALESCE(bld_nm, '') ILIKE :prefix THEN 4
+            WHEN COALESCE(dong_nm, '') ILIKE :prefix THEN 5
+            ELSE 6
           END,
           road_address NULLS LAST,
           plat_plc NULLS LAST
@@ -232,6 +339,7 @@ def search_building_master(
           dong_nm,
           grs_ar,
           agnd_flr,
+          purp_nm,
           COALESCE(NULLIF(road_address, ''), NULLIF(plat_plc, ''), '') AS display_address
         FROM building_master
         {where_clause}
@@ -241,7 +349,7 @@ def search_building_master(
     rows = db.execute(items_statement, params).mappings().all()
 
     return {
-        "items": [dict(row) for row in rows],
+        "items": [attach_region_fields(dict(row)) for row in rows],
         "page": page,
         "limit": limit,
         "total": total,
@@ -249,27 +357,45 @@ def search_building_master(
     }
 
 
-def get_building_master_districts(db: Session) -> List[str]:
-    statement = text("""
+def get_building_master_districts(db: Session, region: Optional[str] = None) -> List[str]:
+    region_value = normalize_region_filter(region)
+    where_parts = [
+        "sgg_cd_nm IS NOT NULL",
+        "sgg_cd_nm <> ''",
+    ]
+    params: Dict[str, Any] = {}
+    if region_value:
+        where_parts.append("sgg_cd_nm ILIKE :region_prefix")
+        params["region_prefix"] = f"{REGION_PREFIXES[region_value]}%"
+
+    statement = text(f"""
         SELECT DISTINCT sgg_cd_nm
         FROM building_master
-        WHERE sgg_cd_nm IS NOT NULL AND sgg_cd_nm <> ''
+        WHERE {" AND ".join(where_parts)}
         ORDER BY sgg_cd_nm
     """)
-    return [row[0] for row in db.execute(statement).all()]
+    return _clean_admin_names([row[0] for row in db.execute(statement, params).all()])
 
 
-def get_building_master_dongs(db: Session, district: str) -> List[str]:
+def get_building_master_dongs(db: Session, district: str, region: Optional[str] = None) -> List[str]:
     district_value = district.strip()
-    statement = text("""
+    region_value = normalize_region_filter(region)
+    region_clause = ""
+    params: Dict[str, Any] = {"district": district_value}
+    if region_value:
+        region_clause = "AND sgg_cd_nm ILIKE :region_prefix"
+        params["region_prefix"] = f"{REGION_PREFIXES[region_value]}%"
+
+    statement = text(f"""
         SELECT DISTINCT bjd_cd_nm
         FROM building_master
         WHERE sgg_cd_nm = :district
+          {region_clause}
           AND bjd_cd_nm IS NOT NULL
           AND bjd_cd_nm <> ''
         ORDER BY bjd_cd_nm
     """)
-    return [row[0] for row in db.execute(statement, {"district": district_value}).all()]
+    return _clean_admin_names([row[0] for row in db.execute(statement, params).all()])
 
 
 def get_building_master_by_id(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
@@ -302,7 +428,7 @@ def get_building_master_by_id(db: Session, building_id: Any) -> Optional[Dict[st
         LIMIT 1
     """)
     row = db.execute(statement, {"building_id": building_id}).mappings().first()
-    return dict(row) if row else None
+    return attach_region_fields(dict(row)) if row else None
 
 
 def get_energy_usage_for_master_building(db: Session, building_id: Any) -> List[Dict[str, Any]]:
@@ -359,10 +485,15 @@ def get_energy_usage_sum_for_period(
     return dict(row) if row else {"elec_qty": None, "gas_qty": None}
 
 
-def get_peer_benchmark_for_master_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
-    statement = text("""
+def get_peer_benchmark_for_master_building(
+    db: Session,
+    building_id: Any,
+    region: Optional[str] = "seoul",
+) -> Optional[Dict[str, Any]]:
+    table_name = _region_table(region, "peer")
+    statement = text(f"""
         SELECT *
-        FROM building_peer_benchmark
+        FROM {table_name}
         WHERE building_id = :building_id
         LIMIT 1
     """)
@@ -370,10 +501,15 @@ def get_peer_benchmark_for_master_building(db: Session, building_id: Any) -> Opt
     return dict(row) if row else None
 
 
-def get_electric_energy_service_lite_for_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
-    statement = text("""
+def get_electric_energy_service_lite_for_building(
+    db: Session,
+    building_id: Any,
+    region: Optional[str] = "seoul",
+) -> Optional[Dict[str, Any]]:
+    table_name = _region_table(region, "electric")
+    statement = text(f"""
         SELECT *
-        FROM electric_energy_service_lite
+        FROM {table_name}
         WHERE building_id = :building_id
         LIMIT 1
     """)
@@ -381,10 +517,15 @@ def get_electric_energy_service_lite_for_building(db: Session, building_id: Any)
     return dict(row) if row else None
 
 
-def get_gas_energy_service_lite_for_building(db: Session, building_id: Any) -> Optional[Dict[str, Any]]:
-    statement = text("""
+def get_gas_energy_service_lite_for_building(
+    db: Session,
+    building_id: Any,
+    region: Optional[str] = "seoul",
+) -> Optional[Dict[str, Any]]:
+    table_name = _region_table(region, "gas")
+    statement = text(f"""
         SELECT *
-        FROM gas_energy_service_lite
+        FROM {table_name}
         WHERE building_id = :building_id
         LIMIT 1
     """)

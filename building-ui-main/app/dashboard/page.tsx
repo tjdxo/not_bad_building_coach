@@ -9,8 +9,11 @@ import {
   formatArea,
   formatBuildingDescriptor,
   getMonthlyEnergy,
+  isIncheonReport,
+  peerBasisLabel,
   formatNumber,
   formatRatioGap,
+  reportRegionName,
   resolveAddressParam,
   searchBuildings,
   type BuildingSearchItem,
@@ -464,7 +467,15 @@ function isDisplayNumber(value?: number | null): value is number {
   return value !== null && value !== undefined && Number.isFinite(value);
 }
 
+function isIncheonPeerBenchmark(peerBenchmark?: PeerBenchmark | null) {
+  return peerBenchmark?.region === "incheon";
+}
+
 function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
+  if (isIncheonPeerBenchmark(peerBenchmark)) {
+    return { value: "공식 등급 미산정", desc: "인천 공식 절대등급 없음" };
+  }
+
   const absoluteGrade = peerBenchmark?.absolute_grade;
   const status = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
 
@@ -491,6 +502,10 @@ function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
 }
 
 function absoluteGradeReason(status?: string | null) {
+  if (status === "official_not_assessed") {
+    return "기준 설명: 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.";
+  }
+
   if (!status) {
     return "원인: 절대등급 산정 기준을 확인할 수 없습니다.";
   }
@@ -505,14 +520,20 @@ function absoluteGradeReason(status?: string | null) {
 }
 
 function shouldShowAbsoluteGrade(peerBenchmark?: PeerBenchmark | null) {
+  if (isIncheonPeerBenchmark(peerBenchmark)) {
+    return false;
+  }
   const absoluteGrade = peerBenchmark?.absolute_grade;
   return Boolean(peerBenchmark?.has_data && absoluteGrade?.grade);
 }
 
 function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
   const relativeGrade = peerBenchmark?.relative_grade;
+  const basisLabel = relativeGrade?.basis_label || peerBenchmark?.peer_basis_label || (
+    isIncheonPeerBenchmark(peerBenchmark) ? "인천시 내 유사 건물군 기준" : "서울시 내 유사 건물군 기준"
+  );
   if (!peerBenchmark?.has_data || !relativeGrade?.grade) {
-    return { value: "산정 불가", desc: "유사군/서울 분포 기준" };
+    return { value: "산정 불가", desc: basisLabel };
   }
 
   return {
@@ -520,7 +541,7 @@ function relativeGradeSummary(peerBenchmark?: PeerBenchmark | null) {
     desc:
       relativeGrade.source === "appendix1_proxy_grade_by_current_peer_percentile"
         ? "현재 유사군 분포 기준 보정"
-        : "서울시 내 유사 건물군 분포 기준",
+        : basisLabel,
   };
 }
 
@@ -558,13 +579,19 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
   const absoluteStatus = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
   const absoluteEnergyIntensity = absoluteGrade?.energy_intensity;
   const relativeGrade = peerBenchmark?.relative_grade;
+  const regionName = isIncheonPeerBenchmark(peerBenchmark) ? "인천광역시" : "서울특별시";
+  const peerBasis = peerBenchmark?.peer_basis_label || (
+    isIncheonPeerBenchmark(peerBenchmark) ? "인천시 내 유사 건물군 기준" : "서울시 내 유사 건물군 기준"
+  );
   const details = [];
 
   details.push({
     title: "절대 등급",
     value: absoluteGradeSummary(peerBenchmark).value,
     lines: [
-      absoluteGrade?.grade_type && absoluteGrade?.area_band
+      isIncheonPeerBenchmark(peerBenchmark)
+        ? "절대 등급: 공식 등급 미산정"
+        : absoluteGrade?.grade_type && absoluteGrade?.area_band
         ? `서울시 기준 ${absoluteGrade.grade_type} / ${absoluteGrade.area_band}㎡ 구간`
         : absoluteGradeSummary(peerBenchmark).desc,
       isDisplayNumber(absoluteEnergyIntensity)
@@ -579,7 +606,7 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     value: relativeGradeSummary(peerBenchmark).value,
     lines: [
       relativeGradeSummary(peerBenchmark).desc,
-      "서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
+      `${regionName} 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.`,
       relativeGrade?.absolute_relative_grade_match === false ? "절대 등급과 상대 등급이 다릅니다." : "",
     ].filter((line): line is string => Boolean(line)),
   });
@@ -587,7 +614,14 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
   details.push({
     title: "분석 기준 안내",
     value: "참고용",
-    lines: [
+    lines: isIncheonPeerBenchmark(peerBenchmark) ? [
+      "절대 등급: 공식 등급 미산정",
+      `상대 등급: ${peerBasis}`,
+      "기준 설명: 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.",
+      "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
+      "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost 기반 추정 모델과 유사건물 중앙값을 활용해 참고용 사용량을 추정합니다.",
+      "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 인천 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
+    ] : [
       "절대 등급: 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.",
       "상대 등급: 서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
       "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
@@ -800,6 +834,9 @@ function AiEstimatedDashboard({
     buildingDescriptor,
     formatArea(building.gross_floor_area),
   ].filter(Boolean);
+  const regionName = reportRegionName(report);
+  const basisLabel = peerBasisLabel(report);
+  const isIncheon = isIncheonReport(report);
 
   return (
     <main className="min-h-screen bg-slate-50 pb-16">
@@ -813,6 +850,8 @@ function AiEstimatedDashboard({
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
                   showAbsoluteGrade ? `절대 등급 ${absoluteGrade.value}` : "",
+                  `${regionName} 기준`,
+                  basisLabel,
                   "AI 추정 기반",
                   "참고용 진단",
                   needsUserInput ? "데이터 확인 필요" : "추정 결과 확인",
@@ -884,10 +923,15 @@ function AiEstimatedDashboard({
         <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
           <h2 className="text-xl font-black text-slate-950">분석 기준 안내</h2>
           <div className="mt-4 space-y-3 text-sm font-semibold leading-7 text-slate-600">
-            <p>절대 등급은 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.</p>
+            <p>
+              {isIncheon
+                ? "절대 등급: 공식 등급 미산정. 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다."
+                : "절대 등급은 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다."}
+            </p>
+            <p>{isIncheon ? `상대 등급은 ${basisLabel}입니다.` : "상대 등급은 서울시 내 유사 건물군 기준입니다."}</p>
             <p>AI 추정 진단은 CatBoost 기반 추정 모델과 유사건물 중앙값, 서비스 기준값을 함께 활용한 참고용 결과입니다.</p>
             <p>가스는 난방방식, 지역난방 여부, 온수·취사 방식에 따라 오차가 커질 수 있으므로 실제 고지서 확인이 필요합니다.</p>
-            <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 서울시 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
+            <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, {isIncheon ? "인천 공식 등급" : "서울시 공식 등급"} 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
           </div>
         </section>
 
@@ -937,6 +981,8 @@ export default async function DashboardPage({
     road_address?: string;
     bld_nm?: string;
     dong_nm?: string;
+    purp_nm?: string;
+    main_purpose?: string;
     grs_ar?: string;
     agnd_flr?: string;
     energy_mode?: string;
@@ -990,6 +1036,8 @@ export default async function DashboardPage({
           road_address: params.road_address,
           bld_nm: params.bld_nm,
           dong_nm: params.dong_nm,
+          purp_nm: params.purp_nm,
+          main_purpose: params.main_purpose,
           grs_ar: params.grs_ar,
           agnd_flr: params.agnd_flr,
         })
@@ -1123,7 +1171,9 @@ export default async function DashboardPage({
       report.peer_benchmark?.relative_grade?.relative_grade_by_seoul_percentile ||
       report.peer_benchmark?.relative_grade?.appendix1_proxy_grade_by_current_peer_percentile,
   });
-  const policyRecommendations = buildPolicyRecommendations(report);
+  const regionName = reportRegionName(report);
+  const basisLabel = peerBasisLabel(report);
+  const policyRecommendations = isIncheonReport(report) ? [] : buildPolicyRecommendations(report);
   const contractorRecommendations = buildContractorRecommendations(report, policyRecommendations);
   return (
     <main className="min-h-screen pb-16">
@@ -1137,6 +1187,12 @@ export default async function DashboardPage({
                 {buildingMeta.join(" · ")}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                  {regionName} 기준
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                  {basisLabel}
+                </span>
                 {report.energy?.source === "db" && (
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
                     공공 데이터 기준
@@ -1227,7 +1283,9 @@ export default async function DashboardPage({
               </div>
 
               <div className="grid gap-8">
-                <PolicyRecommendationCard recommendations={policyRecommendations} />
+                {policyRecommendations.length > 0 && (
+                  <PolicyRecommendationCard recommendations={policyRecommendations} />
+                )}
                 <ContractorRecommendationCard recommendations={contractorRecommendations} />
               </div>
             </section>

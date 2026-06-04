@@ -14,8 +14,12 @@ export type ApiBuilding = {
   plat_plc?: string | null;
   bld_nm?: string | null;
   dong_nm?: string | null;
+  purp_nm?: string | null;
+  main_purpose?: string | null;
   grs_ar?: number | null;
   agnd_flr?: number | null;
+  region?: "seoul" | "incheon" | string | null;
+  region_name?: string | null;
 };
 
 export type BuildingSearchItem = {
@@ -27,8 +31,11 @@ export type BuildingSearchItem = {
   display_address: string;
   bld_nm: string | null;
   dong_nm: string | null;
+  purp_nm?: string | null;
   grs_ar: number | null;
   agnd_flr: number | null;
+  region?: "seoul" | "incheon" | string | null;
+  region_name?: string | null;
 };
 
 export type BuildingSearchResponse = {
@@ -38,6 +45,8 @@ export type BuildingSearchResponse = {
   total: number;
   has_next: boolean;
 };
+
+export type SearchRegion = "seoul" | "incheon";
 
 export type MonthlyEnergyPoint = {
   year: number;
@@ -70,9 +79,13 @@ export type PeerMetric = {
 
 export type PeerBenchmark = {
   has_data: boolean;
+  region?: "seoul" | "incheon" | string | null;
+  region_name?: string | null;
+  peer_basis_label?: string | null;
   message?: string | null;
   peer_count?: number | null;
   peer_total_rank?: number | null;
+  peer_rank_basis?: string | null;
   peer_best_building_id?: number | null;
   peer_rank_label?: string | null;
   reliability_score?: number | null;
@@ -97,6 +110,8 @@ export type PeerBenchmark = {
     threshold_B?: number | null;
     threshold_C?: number | null;
     threshold_D?: number | null;
+    basis_label?: string | null;
+    description?: string | null;
   } | null;
   relative_grade?: {
     grade?: string | null;
@@ -104,6 +119,7 @@ export type PeerBenchmark = {
     relative_grade_by_seoul_percentile?: string | null;
     appendix1_proxy_grade_by_current_peer_percentile?: string | null;
     absolute_relative_grade_match?: boolean | null;
+    basis_label?: string | null;
   } | null;
   peer_monthly?: {
     electricity_mean?: EnergyUsageMonthlyPoint[];
@@ -196,6 +212,8 @@ export type ReportApiResponse = {
   status?: "ok" | "energy_data_missing";
   report_mode?: "measured" | "estimated" | "mixed" | "no_data";
   message?: string | null;
+  region?: "seoul" | "incheon" | string | null;
+  region_name?: string | null;
   building: ApiBuilding;
   peer_group?: {
     rank?: number | null;
@@ -224,6 +242,24 @@ export type ReportApiResponse = {
   ai_diagnosis?: AiDiagnosis | null;
   saving_estimate?: SavingEstimate | null;
 };
+
+export function reportRegion(report: ReportApiResponse) {
+  return report.region || report.building.region || report.peer_benchmark?.region || "seoul";
+}
+
+export function reportRegionName(report: ReportApiResponse) {
+  const region = reportRegion(report);
+  return report.region_name || report.building.region_name || report.peer_benchmark?.region_name || (region === "incheon" ? "인천광역시" : "서울특별시");
+}
+
+export function peerBasisLabel(report: ReportApiResponse) {
+  const region = reportRegion(report);
+  return report.peer_benchmark?.peer_basis_label || (region === "incheon" ? "인천시 내 유사 건물군 기준" : "서울시 내 유사 건물군 기준");
+}
+
+export function isIncheonReport(report: ReportApiResponse) {
+  return reportRegion(report) === "incheon";
+}
 
 export type AiReportUserAnswers = {
   electric?: Record<string, string | string[]>;
@@ -373,6 +409,8 @@ type BuildingRouteParams = {
   road_address?: string | null;
   bld_nm?: string | null;
   dong_nm?: string | null;
+  purp_nm?: string | null;
+  main_purpose?: string | null;
   grs_ar?: number | null;
   agnd_flr?: number | null;
 };
@@ -387,6 +425,8 @@ function buildingRouteQuery(building: BuildingRouteParams) {
   if (building.road_address) params.set("road_address", building.road_address);
   if (building.bld_nm) params.set("bld_nm", building.bld_nm);
   if (building.dong_nm) params.set("dong_nm", building.dong_nm);
+  if (building.purp_nm) params.set("purp_nm", building.purp_nm);
+  if (building.main_purpose) params.set("main_purpose", building.main_purpose);
   if (building.grs_ar) params.set("grs_ar", String(building.grs_ar));
   if (building.agnd_flr) params.set("agnd_flr", String(building.agnd_flr));
   return params;
@@ -431,6 +471,7 @@ export function reportHrefForSearchBuilding(building: BuildingSearchItem) {
 }
 
 export type BuildingSearchParams = {
+  region?: SearchRegion | string;
   district?: string;
   dong?: string;
   query?: string;
@@ -440,7 +481,55 @@ export type BuildingSearchParams = {
   signal?: AbortSignal;
 };
 
+export async function fetchDistricts(paramsInput: { region?: SearchRegion | string; signal?: AbortSignal } = {}) {
+  const params = new URLSearchParams();
+  const region = paramsInput.region?.trim() || "";
+  if (region) {
+    params.set("region", region);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/districts?${params.toString()}`, {
+    cache: "no-store",
+    signal: paramsInput.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`구 목록 API 오류: ${response.status}`);
+  }
+
+  return (await response.json()) as { items: string[] };
+}
+
+export async function fetchDongs(paramsInput: {
+  district: string;
+  region?: SearchRegion | string;
+  signal?: AbortSignal;
+}) {
+  const district = paramsInput.district.trim();
+  if (!district) {
+    return { items: [] as string[] };
+  }
+
+  const params = new URLSearchParams({ district });
+  const region = paramsInput.region?.trim() || "";
+  if (region) {
+    params.set("region", region);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/dongs?${params.toString()}`, {
+    cache: "no-store",
+    signal: paramsInput.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`동 목록 API 오류: ${response.status}`);
+  }
+
+  return (await response.json()) as { items: string[] };
+}
+
 export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
+  const region = paramsInput.region?.trim() || "";
   const district = paramsInput.district?.trim() || "";
   const dong = paramsInput.dong?.trim() || "";
   const query = paramsInput.query?.trim() || "";
@@ -448,7 +537,7 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
   const page = Math.max(1, paramsInput.page || 1);
   const limit = Math.min(50, Math.max(1, paramsInput.limit || 20));
 
-  if (!district && !dong && !query && !buildingKeyword) {
+  if (!region && !district && !dong && !query && !buildingKeyword) {
     return {
       items: [],
       page,
@@ -459,6 +548,9 @@ export async function searchBuildings(paramsInput: BuildingSearchParams = {}) {
   }
 
   const params = new URLSearchParams();
+  if (region) {
+    params.set("region", region);
+  }
   if (district) {
     params.set("district", district);
   }
@@ -500,6 +592,7 @@ export async function createReportForBuilding(building: BuildingSearchItem) {
       road_address: building.road_address,
       bld_nm: building.bld_nm,
       dong_nm: building.dong_nm,
+      purp_nm: building.purp_nm,
       grs_ar: building.grs_ar,
       agnd_flr: building.agnd_flr,
     }),
@@ -544,6 +637,8 @@ export async function fetchReportForParams(params: {
   road_address?: string;
   bld_nm?: string;
   dong_nm?: string;
+  purp_nm?: string;
+  main_purpose?: string;
   grs_ar?: string;
   agnd_flr?: string;
 }) {
@@ -555,6 +650,8 @@ export async function fetchReportForParams(params: {
   if (params.road_address) body.road_address = params.road_address;
   if (params.bld_nm) body.bld_nm = params.bld_nm;
   if (params.dong_nm) body.dong_nm = params.dong_nm;
+  if (params.purp_nm) body.purp_nm = params.purp_nm;
+  if (params.main_purpose) body.main_purpose = params.main_purpose;
   if (params.grs_ar) body.grs_ar = Number(params.grs_ar);
   if (params.agnd_flr) body.agnd_flr = Number(params.agnd_flr);
 
@@ -650,7 +747,7 @@ export function formatBuildingType(type: string) {
 }
 
 export function formatBuildingDescriptor(
-  building: Pick<ApiBuilding, "bld_nm" | "dong_nm" | "building_type">,
+  building: Pick<ApiBuilding, "bld_nm" | "dong_nm" | "purp_nm" | "main_purpose" | "building_type">,
 ) {
   const nameParts = [building.bld_nm, building.dong_nm]
     .map((item) => item?.trim())
@@ -664,7 +761,7 @@ export function formatBuildingDescriptor(
     return formatBuildingType(building.building_type);
   }
 
-  return "";
+  return building.purp_nm || building.main_purpose || "";
 }
 
 export function formatArea(value: number) {

@@ -1,4 +1,4 @@
-import type { ReportApiResponse } from "@/lib/building-api";
+import { isIncheonReport, type ReportApiResponse } from "@/lib/building-api";
 
 export type PolicyRecommendation = {
   id: string;
@@ -49,6 +49,10 @@ function addCandidate(candidates: PolicyCandidate[], candidate: PolicyCandidate)
 }
 
 export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRecommendation[] {
+  if (isIncheonReport(report)) {
+    return [];
+  }
+
   const text = buildingText(report);
   const approvalYear = Number(report.building.approval_year || 0);
   const currentYear = new Date().getFullYear();

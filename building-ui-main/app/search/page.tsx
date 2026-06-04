@@ -7,13 +7,19 @@ import {
   dashboardHrefForBuilding,
   searchBuildings,
   type BuildingSearchItem,
+  type SearchRegion,
 } from "@/lib/building-api";
-import { SEOUL_DISTRICTS, SEOUL_DONGS_BY_DISTRICT } from "@/lib/seoul-address";
+import { DISTRICTS_BY_REGION, DONGS_BY_REGION_AND_DISTRICT } from "@/lib/seoul-address";
 
 const LIMIT = 20;
 const PREMIUM_UNLOCK_STORAGE_PREFIX = "building-coach:premium-unlocked:";
+const REGION_OPTIONS: Array<{ value: SearchRegion; label: string }> = [
+  { value: "seoul", label: "서울특별시" },
+  { value: "incheon", label: "인천광역시" },
+];
 
 type SearchFilters = {
+  region: SearchRegion;
   district: string;
   dong: string;
   query: string;
@@ -21,7 +27,11 @@ type SearchFilters = {
 };
 
 function shortDistrictName(district: string) {
-  return district.replace("서울특별시 ", "");
+  return district.replace(/^서울특별시\s*/, "").replace(/^인천광역시\s*/, "");
+}
+
+function normalizeSearchRegion(value: FormDataEntryValue | null): SearchRegion {
+  return value === "incheon" ? "incheon" : "seoul";
 }
 
 function buildingIdentity(building: BuildingSearchItem) {
@@ -30,6 +40,9 @@ function buildingIdentity(building: BuildingSearchItem) {
 
 function buildingScaleParts(building: BuildingSearchItem) {
   const parts: string[] = [];
+  if (building.purp_nm) {
+    parts.push(building.purp_nm);
+  }
   if (building.grs_ar && building.grs_ar > 0) {
     parts.push(`연면적 ${building.grs_ar.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}㎡`);
   }
@@ -89,6 +102,7 @@ function SearchLoadingState({ onCancel }: { onCancel: () => void }) {
 
 export default function SearchPage() {
   const router = useRouter();
+  const [region, setRegion] = useState<SearchRegion>("seoul");
   const [district, setDistrict] = useState("");
   const [dong, setDong] = useState("");
   const [query, setQuery] = useState("");
@@ -114,15 +128,21 @@ export default function SearchPage() {
   }, []);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / LIMIT)), [total]);
-  const dongs = useMemo(() => {
-    if (!district) {
-      return [];
-    }
-
-    return SEOUL_DONGS_BY_DISTRICT[district as keyof typeof SEOUL_DONGS_BY_DISTRICT] ?? [];
-  }, [district]);
-  const canSearch = Boolean(district || dong || query.trim() || buildingKeyword.trim());
+  const districtOptions = [...DISTRICTS_BY_REGION[region]];
+  const dongs = district
+    ? [
+        ...(
+          DONGS_BY_REGION_AND_DISTRICT[region][
+            district as keyof (typeof DONGS_BY_REGION_AND_DISTRICT)[typeof region]
+          ] ?? []
+        ),
+      ]
+    : [];
+  const canSearch = Boolean(region || district || dong || query.trim() || buildingKeyword.trim());
   const searchControlsDisabled = loading;
+  const queryPlaceholder = region === "incheon"
+    ? "예: 봉재산로 10, 부평동 10-394"
+    : "예: 성내천로, 거여동 362, 33다길 2";
 
   const resetSearchPage = () => {
     setPage(1);
@@ -130,9 +150,9 @@ export default function SearchPage() {
     setEstimatedChoiceReady(false);
   };
 
-  useEffect(() => {
+  const resetSearchResults = () => {
+    latestRequestIdRef.current += 1;
     searchControllerRef.current?.abort();
-    setDong("");
     setItems([]);
     setTotal(0);
     setHasNext(false);
@@ -143,7 +163,18 @@ export default function SearchPage() {
     setLoading(false);
     setError("");
     setStatusMessage("");
-  }, [district]);
+  };
+
+  useEffect(() => {
+    setDistrict("");
+    setDong("");
+    resetSearchResults();
+  }, [region]);
+
+  useEffect(() => {
+    setDong("");
+    resetSearchResults();
+  }, [district, region]);
 
   useEffect(() => {
     return () => {
@@ -152,6 +183,7 @@ export default function SearchPage() {
   }, []);
 
   const currentFilters = (): SearchFilters => ({
+    region,
     district,
     dong,
     query,
@@ -160,17 +192,18 @@ export default function SearchPage() {
 
   const runSearch = async (nextPage = 1, filters = currentFilters()) => {
     const cleanFilters = {
+      region: filters.region,
       district: filters.district.trim(),
       dong: filters.dong.trim(),
       query: filters.query.trim(),
       buildingKeyword: filters.buildingKeyword.trim(),
     };
     const hasSearchCondition = Boolean(
-      cleanFilters.district || cleanFilters.dong || cleanFilters.query || cleanFilters.buildingKeyword,
+      cleanFilters.region || cleanFilters.district || cleanFilters.dong || cleanFilters.query || cleanFilters.buildingKeyword,
     );
 
     if (!hasSearchCondition) {
-      setError("구, 동, 세부 주소 또는 건물명·동명 중 하나 이상을 입력해주세요.");
+      setError("시도, 구, 동, 세부 주소 또는 건물명·동명 중 하나 이상을 입력해주세요.");
       setStatusMessage("");
       setItems([]);
       setTotal(0);
@@ -194,6 +227,7 @@ export default function SearchPage() {
 
     try {
       const result = await searchBuildings({
+        region: cleanFilters.region,
         district: cleanFilters.district,
         dong: cleanFilters.dong,
         query: cleanFilters.query,
@@ -243,12 +277,14 @@ export default function SearchPage() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const nextFilters = {
+      region: normalizeSearchRegion(formData.get("region")),
       district: String(formData.get("district") || "").trim(),
       dong: String(formData.get("dong") || "").trim(),
       query: String(formData.get("query") || "").trim(),
       buildingKeyword: String(formData.get("building_keyword") || "").trim(),
     };
 
+    setRegion(nextFilters.region);
     setDistrict(nextFilters.district);
     setDong(nextFilters.dong);
     setQuery(nextFilters.query);
@@ -294,8 +330,8 @@ export default function SearchPage() {
           <p className="text-sm font-black tracking-[0.25em] text-emerald-600">주소 검색</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">내 건물 주소 찾기</h1>
           <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">
-            서울시 건물 데이터를 기반으로 전기·가스 사용량과 유사 건물 효율을 비교합니다.
-            구와 동을 먼저 선택한 뒤 상세 주소를 입력하면 더 정확하게 찾을 수 있습니다.
+            서울·인천 건물 데이터를 기반으로 전기·가스 사용량과 유사 건물 효율을 비교합니다.
+            시도를 고른 뒤 해당 지역의 구와 동을 단계적으로 선택하면 더 정확하게 찾을 수 있습니다.
           </p>
         </div>
 
@@ -303,10 +339,21 @@ export default function SearchPage() {
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[0.75fr_1fr_1fr_1.35fr_1.35fr_auto] xl:items-end">
               <div className="flex min-h-[112px] flex-col">
-                <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">시도</label>
-                <div className="mt-2 flex h-14 items-center rounded-2xl bg-emerald-50 px-4 text-sm font-black text-emerald-700 ring-1 ring-emerald-100">
-                  서울특별시
-                </div>
+                <label htmlFor="region" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">시도</label>
+                <select
+                  id="region"
+                  name="region"
+                  value={region}
+                  onChange={(event) => setRegion(normalizeSearchRegion(event.target.value))}
+                  disabled={searchControlsDisabled}
+                  className="mt-2 h-14 w-full rounded-2xl border border-emerald-100 bg-emerald-50 px-4 pr-12 text-sm font-black text-emerald-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  {REGION_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
               </div>
 
@@ -323,7 +370,7 @@ export default function SearchPage() {
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="">전체 구</option>
-                  {SEOUL_DISTRICTS.map((item) => (
+                  {districtOptions.map((item) => (
                     <option key={item} value={item}>
                       {shortDistrictName(item)}
                     </option>
@@ -370,7 +417,7 @@ export default function SearchPage() {
                     resetSearchPage();
                   }}
                   disabled={searchControlsDisabled}
-                  placeholder="예: 성내천로, 거여동 362, 33다길 2"
+                  placeholder={queryPlaceholder}
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
@@ -472,7 +519,18 @@ export default function SearchPage() {
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div>
-                        <div className={labelClass}>도로명주소</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className={labelClass}>도로명주소</div>
+                          {building.region_name && (
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                                selected ? "bg-white/20 text-white ring-1 ring-white/25" : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {building.region_name}
+                            </span>
+                          )}
+                        </div>
                         <h3 className={addressClass}>
                           {building.display_address || building.road_address}
                         </h3>
@@ -554,6 +612,11 @@ export default function SearchPage() {
                   <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
                     {selectedBuilding.plat_plc}
                   </p>
+                  {selectedBuilding.region_name && (
+                    <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                      {selectedBuilding.region_name}
+                    </div>
+                  )}
                   {buildingScale(selectedBuilding) && (
                     <div className="mt-4 flex flex-col items-start gap-2">
                       {buildingScaleParts(selectedBuilding).map((item) => (
@@ -618,6 +681,11 @@ export default function SearchPage() {
               <p className="truncate text-sm font-black text-slate-950">
                 {selectedBuilding.display_address}
               </p>
+              {selectedBuilding.region_name && (
+                <p className="truncate text-xs font-black text-slate-500">
+                  {selectedBuilding.region_name}
+                </p>
+              )}
               {buildingIdentity(selectedBuilding) && (
                 <p className="truncate text-xs font-black text-emerald-700">
                   {buildingIdentity(selectedBuilding)}

@@ -178,15 +178,100 @@ def _build_peer_monthly_series(row: Dict[str, Any], prefix: str) -> List[Dict[st
     return monthly
 
 
-def _build_peer_benchmark_response(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _relative_grade_from_percentile(percentile: Optional[float]) -> Optional[str]:
+    if percentile is None:
+        return None
+    if percentile <= 20:
+        return "A"
+    if percentile <= 40:
+        return "B"
+    if percentile <= 60:
+        return "C"
+    if percentile <= 80:
+        return "D"
+    return "E"
+
+
+def _rank_from_percentile(percentile: Optional[float], peer_count: Optional[int]) -> Optional[int]:
+    if percentile is None or not peer_count or peer_count <= 0:
+        return None
+    return _clamp_peer_rank(math.ceil((max(0, min(100, percentile)) / 100) * peer_count), peer_count)
+
+
+def _peer_basis_label(region: str) -> str:
+    if region == "incheon":
+        return "인천시 내 유사 건물군 기준"
+    if region == "seoul":
+        return "서울시 내 유사 건물군 기준"
+    return "동일 지역 내 유사 건물군 기준"
+
+
+def _first_present(row: Dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row and row.get(key) is not None:
+            return row.get(key)
+    return None
+
+
+def _build_absolute_grade_response(row: Dict[str, Any], region: str) -> Dict[str, Any]:
+    if region == "incheon":
+        return {
+            "grade_type": None,
+            "area_band": None,
+            "energy_intensity": None,
+            "grade": None,
+            "status": "official_not_assessed",
+            "seoul_grade_applicability": None,
+            "threshold_A": None,
+            "threshold_B": None,
+            "threshold_C": None,
+            "threshold_D": None,
+            "basis_label": "공식 등급 미산정",
+            "description": "인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.",
+        }
+
+    return {
+        "grade_type": _safe_string(row.get("absolute_grade_type")),
+        "area_band": _safe_string(row.get("absolute_area_band")),
+        "energy_intensity": _coerce_float_or_none(row.get("absolute_energy_intensity")),
+        "grade": _safe_string(row.get("absolute_grade")),
+        "status": _safe_string(row.get("absolute_grade_status")),
+        "seoul_grade_applicability": _safe_string(row.get("seoul_grade_applicability")),
+        "threshold_A": _coerce_float_or_none(_first_present(row, "absolute_threshold_A", "absolute_threshold_a")),
+        "threshold_B": _coerce_float_or_none(_first_present(row, "absolute_threshold_B", "absolute_threshold_b")),
+        "threshold_C": _coerce_float_or_none(_first_present(row, "absolute_threshold_C", "absolute_threshold_c")),
+        "threshold_D": _coerce_float_or_none(_first_present(row, "absolute_threshold_D", "absolute_threshold_d")),
+        "basis_label": "서울시 참고 절대등급 기준",
+        "description": "서울시 건물 에너지 신고·등급제 및 공공 데이터 기반 자체 기준을 참고합니다.",
+    }
+
+
+def _build_peer_benchmark_response(row: Optional[Dict[str, Any]], region: str = "seoul") -> Dict[str, Any]:
+    region_name = crud.get_region_name(region)
     if not row:
         return {
             "has_data": False,
+            "region": region,
+            "region_name": region_name,
+            "peer_basis_label": _peer_basis_label(region),
+            "absolute_grade": _build_absolute_grade_response({}, region),
+            "relative_grade": {
+                "grade": None,
+                "source": None,
+                "relative_grade_by_seoul_percentile": None,
+                "appendix1_proxy_grade_by_current_peer_percentile": None,
+                "absolute_relative_grade_match": None,
+                "basis_label": _peer_basis_label(region),
+            },
             "message": "이 건물의 유사군 분석 결과가 아직 없습니다.",
         }
 
     peer_count = _coerce_int_or_none(row.get("peer_count"))
     peer_total_rank = _coerce_int_or_none(row.get("peer_total_rank"))
+    rank_basis = "peer_total_rank" if peer_total_rank else None
+    if not peer_total_rank:
+        peer_total_rank = _rank_from_percentile(_coerce_float_or_none(row.get("total_percentile")), peer_count)
+        rank_basis = "total_percentile" if peer_total_rank else None
     peer_total_rank = _clamp_peer_rank(peer_total_rank, peer_count)
     peer_rank_label = None
     if peer_count and peer_count > 0 and peer_total_rank:
@@ -198,11 +283,18 @@ def _build_peer_benchmark_response(row: Optional[Dict[str, Any]]) -> Dict[str, A
     if not relative_grade and proxy_grade:
         relative_grade = proxy_grade
         relative_grade_source = "appendix1_proxy_grade_by_current_peer_percentile"
+    if not relative_grade:
+        relative_grade = _relative_grade_from_percentile(_coerce_float_or_none(row.get("total_percentile")))
+        relative_grade_source = "total_percentile_reference" if relative_grade else None
 
     return {
         "has_data": True,
+        "region": region,
+        "region_name": region_name,
+        "peer_basis_label": _peer_basis_label(region),
         "peer_count": peer_count,
         "peer_total_rank": peer_total_rank,
+        "peer_rank_basis": rank_basis,
         "peer_best_building_id": _coerce_int_or_none(row.get("peer_best_building_id")),
         "peer_rank_label": peer_rank_label,
         "reliability_score": _coerce_float_or_none(row.get("reliability_score")),
@@ -216,24 +308,14 @@ def _build_peer_benchmark_response(row: Optional[Dict[str, Any]]) -> Dict[str, A
         "electricity": _build_peer_metric(row, "elec"),
         "gas": _build_peer_metric(row, "gas"),
         "total": _build_peer_metric(row, "total"),
-        "absolute_grade": {
-            "grade_type": _safe_string(row.get("absolute_grade_type")),
-            "area_band": _safe_string(row.get("absolute_area_band")),
-            "energy_intensity": _coerce_float_or_none(row.get("absolute_energy_intensity")),
-            "grade": _safe_string(row.get("absolute_grade")),
-            "status": _safe_string(row.get("absolute_grade_status")),
-            "seoul_grade_applicability": _safe_string(row.get("seoul_grade_applicability")),
-            "threshold_A": _coerce_float_or_none(row.get("absolute_threshold_A")),
-            "threshold_B": _coerce_float_or_none(row.get("absolute_threshold_B")),
-            "threshold_C": _coerce_float_or_none(row.get("absolute_threshold_C")),
-            "threshold_D": _coerce_float_or_none(row.get("absolute_threshold_D")),
-        },
+        "absolute_grade": _build_absolute_grade_response(row, region),
         "relative_grade": {
             "grade": relative_grade,
             "source": relative_grade_source,
             "relative_grade_by_seoul_percentile": _safe_string(row.get("relative_grade_by_seoul_percentile")),
             "appendix1_proxy_grade_by_current_peer_percentile": proxy_grade,
             "absolute_relative_grade_match": _coerce_bool_or_none(row.get("absolute_relative_grade_match")),
+            "basis_label": _peer_basis_label(region),
         },
         "peer_monthly": {
             "electricity_mean": _build_peer_monthly_series(row, "peer_elec_mean"),
@@ -292,17 +374,23 @@ def _build_energy_usage_report_text(
     peer_benchmark: Dict[str, Any],
     electricity_ratio: float,
     gas_ratio: float,
+    region: str = "seoul",
 ) -> str:
     if peer_benchmark.get("has_data"):
         rank = peer_benchmark.get("peer_rank_label") or "산정 가능"
         reliability = peer_benchmark.get("reliability_label") or "신뢰도 산정"
         overuse_type = peer_benchmark.get("peer_overuse_type") or "월별 사용량과 원단위"
+        grade_note = (
+            "공식 절대등급은 미산정이며, 인천시 내 유사 건물군 기준 상대등급과 순위를 중심으로 개선 우선순위를 정할 수 있습니다."
+            if region == "incheon"
+            else "절대등급, 상대등급, 유사군 순위를 함께 보며 개선 우선순위를 정할 수 있습니다."
+        )
         return (
             f"1. 한줄 진단: {building_name}의 최근 12개월 에너지 사용량과 유사군 벤치마크를 함께 확인했습니다.\n"
             f"2. 왜 이렇게 분석되었는지: 매핑된 유사군 기준 순위는 {rank}이며, 비교 신뢰도는 {reliability}입니다. "
             f"전기는 유사군 평균 대비 {(electricity_ratio - 1) * 100:+.1f}%, 가스는 {(gas_ratio - 1) * 100:+.1f}% 수준입니다.\n"
             f"3. 우선 실행 액션 3가지: {overuse_type} 점검, 피크 월 운영 조건 확인, 유사군 평균을 넘는 에너지 항목부터 개선.\n"
-            "4. 예상 관리 포인트: 절대등급, 상대등급, 유사군 순위를 함께 보며 개선 우선순위를 정할 수 있습니다."
+            f"4. 예상 관리 포인트: {grade_note}"
         )
 
     return (
@@ -384,7 +472,11 @@ def _ai_display_value(diagnosis: Optional[Dict[str, Any]]) -> float:
     return 0
 
 
-def _build_estimated_report_text(building_name: str, ai_diagnosis: Dict[str, Any]) -> str:
+def _build_estimated_report_text(
+    building_name: str,
+    ai_diagnosis: Dict[str, Any],
+    region: str = "seoul",
+) -> str:
     parts = []
     electric = ai_diagnosis.get("electric")
     gas = ai_diagnosis.get("gas")
@@ -393,17 +485,24 @@ def _build_estimated_report_text(building_name: str, ai_diagnosis: Dict[str, Any
     if gas:
         parts.append(f"가스: {gas.get('diagnosis_label') or '참고용 진단'} / 신뢰도 {gas.get('confidence_label') or '산정 불가'}")
     summary = ", ".join(parts) if parts else "AI 추정 결과 없음"
+    caution = (
+        "본 결과는 인천광역시 건물 공공데이터와 동일 지역 내 유사 건물군 비교를 기반으로 한 참고용 분석입니다."
+        if region == "incheon"
+        else "본 결과는 서울시 공식 등급이나 법적 효력을 갖는 인증 결과가 아닌 참고용 분석입니다."
+    )
     return (
         f"1. 한줄 진단: {building_name}은 실측 에너지 사용량이 부족해 AI 추정 기반 참고용 진단을 표시합니다.\n"
         f"2. 왜 이렇게 분석되었는지: {summary}. AI 예측값, 유사건물 중앙값, 서비스 기준값을 함께 검토했습니다.\n"
         "3. 우선 실행 액션 3가지: 실제 고지서 확인, 전기·가스 사용량 직접 입력, 신뢰도 낮은 항목 우선 보정.\n"
-        "4. 주의사항: 본 결과는 서울시 공식 등급이나 법적 효력을 갖는 인증 결과가 아닌 참고용 분석입니다."
+        f"4. 주의사항: {caution}"
     )
 
 
 def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> Dict[str, Any]:
     display_address = item.get("display_address") or item.get("road_address") or item.get("plat_plc") or fallback_address
     building_id = _coerce_int(item.get("building_id"))
+    region = item.get("region") or crud.detect_region_from_building(item)
+    region_name = item.get("region_name") or crud.get_region_name(region)
     return {
         "id": building_id,
         "building_id": item.get("building_id"),
@@ -420,8 +519,12 @@ def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> D
         "plat_plc": item.get("plat_plc"),
         "bld_nm": item.get("bld_nm"),
         "dong_nm": item.get("dong_nm"),
+        "purp_nm": item.get("purp_nm"),
+        "main_purpose": item.get("main_purpose"),
         "grs_ar": item.get("grs_ar"),
         "agnd_flr": item.get("agnd_flr"),
+        "region": region,
+        "region_name": region_name,
     }
 
 
@@ -442,20 +545,25 @@ def build_master_fallback_report(request: schemas.ReportRequest) -> schemas.Repo
         )
         for month in range(1, 13)
     ]
+    building = _master_building_info(
+        {
+            "building_id": request.building_id,
+            "display_address": display_name,
+            "road_address": request.road_address,
+            "plat_plc": request.plat_plc,
+            "bld_nm": request.bld_nm,
+            "dong_nm": request.dong_nm,
+            "purp_nm": request.purp_nm,
+            "main_purpose": request.main_purpose,
+            "grs_ar": request.grs_ar,
+            "agnd_flr": request.agnd_flr,
+        },
+        fallback_address=request.address,
+    )
     raw_analysis_json = {
-        "building": _master_building_info(
-            {
-                "building_id": request.building_id,
-                "display_address": display_name,
-                "road_address": request.road_address,
-                "plat_plc": request.plat_plc,
-                "bld_nm": request.bld_nm,
-                "dong_nm": request.dong_nm,
-                "grs_ar": request.grs_ar,
-                "agnd_flr": request.agnd_flr,
-            },
-            fallback_address=request.address,
-        ),
+        "building": building,
+        "region": building.get("region"),
+        "region_name": building.get("region_name"),
         "energy_summary": {
             "target_avg_electricity_kwh": 0,
             "target_avg_gas_m3": 0,
@@ -474,6 +582,8 @@ def build_master_fallback_report(request: schemas.ReportRequest) -> schemas.Repo
 
     return schemas.ReportResponse(
         report_mode="no_data",
+        region=building.get("region"),
+        region_name=building.get("region_name"),
         building=raw_analysis_json["building"],
         energy_summary=raw_analysis_json["energy_summary"],
         analysis=raw_analysis_json["analysis"],
@@ -499,6 +609,8 @@ def build_master_request_from_item(
         road_address=item.get("road_address"),
         bld_nm=item.get("bld_nm"),
         dong_nm=item.get("dong_nm"),
+        purp_nm=item.get("purp_nm"),
+        main_purpose=item.get("main_purpose"),
         grs_ar=item.get("grs_ar"),
         agnd_flr=item.get("agnd_flr"),
     )
@@ -514,7 +626,9 @@ def build_energy_usage_report(
     db: Optional[Session] = None,
 ) -> schemas.ReportResponse:
     building = _master_building_info(building_item, fallback_address=request.address)
-    peer_benchmark = _build_peer_benchmark_response(peer_benchmark_row)
+    region = building.get("region") or "seoul"
+    region_name = building.get("region_name") or crud.get_region_name(region)
+    peer_benchmark = _build_peer_benchmark_response(peer_benchmark_row, region)
     ai_diagnosis = build_ai_diagnosis(electric_ai_row, gas_ai_row)
 
     if not usage_rows:
@@ -531,6 +645,8 @@ def build_energy_usage_report(
             }
             raw_analysis_json = {
                 "building": building,
+                "region": region,
+                "region_name": region_name,
                 "energy_source": "ai_estimated",
                 "peer_benchmark": peer_benchmark,
                 "ai_diagnosis": ai_diagnosis,
@@ -540,6 +656,8 @@ def build_energy_usage_report(
             return schemas.ReportResponse(
                 report_mode="estimated",
                 message="실측 에너지 사용량이 없어 AI 추정 기반 참고용 진단을 표시합니다.",
+                region=region,
+                region_name=region_name,
                 building=building,
                 peer_group={
                     "rank": peer_benchmark.get("peer_total_rank"),
@@ -554,7 +672,7 @@ def build_energy_usage_report(
                     "interpretation": "실측 데이터가 부족해 AI 예측값, 유사건물 중앙값, 서비스 기준값을 함께 보여주는 참고용 진단입니다.",
                 },
                 monthly_energy=[],
-                report_text=_build_estimated_report_text(building["name"], ai_diagnosis),
+                report_text=_build_estimated_report_text(building["name"], ai_diagnosis, region),
                 raw_analysis_json=raw_analysis_json,
                 energy={
                     "source": "ai_placeholder",
@@ -577,6 +695,8 @@ def build_energy_usage_report(
             status="energy_data_missing",
             report_mode="no_data",
             message="선택한 건물의 공공 에너지 사용량 데이터가 없습니다.",
+            region=region,
+            region_name=region_name,
             building=building,
             energy_summary={
                 "target_avg_electricity_kwh": 0,
@@ -596,6 +716,8 @@ def build_energy_usage_report(
             report_text="선택한 건물의 공공 에너지 사용량 데이터가 없습니다.",
             raw_analysis_json={
                 "building": building,
+                "region": region,
+                "region_name": region_name,
                 "energy_source": "none",
                 "peer_benchmark": peer_benchmark,
                 "saving_estimate": saving_estimate,
@@ -699,6 +821,8 @@ def build_energy_usage_report(
     saving_estimate = build_saving_estimate(db, ordered_usage_rows, peer_benchmark_row, period_start, period_end)
     raw_analysis_json = {
         "building": building,
+        "region": region,
+        "region_name": region_name,
         "energy_source": "db",
         "is_estimated_included": estimated_included,
         "is_estimated_gas_included": estimated_gas_included,
@@ -711,6 +835,8 @@ def build_energy_usage_report(
         measured_ai_diagnosis["mode"] = "mixed"
     return schemas.ReportResponse(
         report_mode="mixed" if measured_ai_diagnosis.get("has_data") else "measured",
+        region=region,
+        region_name=region_name,
         building=building,
         peer_group={
             "rank": peer_benchmark.get("peer_total_rank"),
@@ -737,6 +863,7 @@ def build_energy_usage_report(
             peer_benchmark,
             electricity_ratio,
             gas_ratio,
+            region,
         ),
         raw_analysis_json=raw_analysis_json,
         energy={
@@ -809,13 +936,17 @@ def create_report(request: schemas.ReportRequest, db: Session = Depends(get_db))
                 "plat_plc": request.plat_plc,
                 "bld_nm": request.bld_nm,
                 "dong_nm": request.dong_nm,
+                "purp_nm": request.purp_nm,
+                "main_purpose": request.main_purpose,
                 "grs_ar": request.grs_ar,
                 "agnd_flr": request.agnd_flr,
             }
+            crud.attach_region_fields(building_item)
+        region = crud.detect_region_from_building(building_item)
         usage_rows = crud.get_energy_usage_for_master_building(db, request.building_id)
-        peer_benchmark_row = crud.get_peer_benchmark_for_master_building(db, request.building_id)
-        electric_ai_row = crud.get_electric_energy_service_lite_for_building(db, request.building_id)
-        gas_ai_row = crud.get_gas_energy_service_lite_for_building(db, request.building_id)
+        peer_benchmark_row = crud.get_peer_benchmark_for_master_building(db, request.building_id, region=region)
+        electric_ai_row = crud.get_electric_energy_service_lite_for_building(db, request.building_id, region=region)
+        gas_ai_row = crud.get_gas_energy_service_lite_for_building(db, request.building_id, region=region)
         return build_energy_usage_report(
             request,
             building_item,

@@ -10,6 +10,8 @@ class ReportRequest(BaseModel):
     road_address: Optional[str] = None
     bld_nm: Optional[str] = None
     dong_nm: Optional[str] = None
+    purp_nm: Optional[str] = None
+    main_purpose: Optional[str] = None
     grs_ar: Optional[float] = None
     agnd_flr: Optional[int] = None
 
@@ -30,8 +32,12 @@ class BuildingInfo(BaseModel):
     plat_plc: Optional[str] = None
     bld_nm: Optional[str] = None
     dong_nm: Optional[str] = None
+    purp_nm: Optional[str] = None
+    main_purpose: Optional[str] = None
     grs_ar: Optional[float] = None
     agnd_flr: Optional[int] = None
+    region: Optional[str] = None
+    region_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,8 +51,11 @@ class BuildingSearchItem(BaseModel):
     display_address: str
     bld_nm: Optional[str] = None
     dong_nm: Optional[str] = None
+    purp_nm: Optional[str] = None
     grs_ar: Optional[float] = None
     agnd_flr: Optional[int] = None
+    region: Optional[str] = None
+    region_name: Optional[str] = None
 
 
 class BuildingSearchResponse(BaseModel):
@@ -157,6 +166,8 @@ class ReportResponse(BaseModel):
     status: str = "ok"
     report_mode: str = "measured"
     message: Optional[str] = None
+    region: Optional[str] = None
+    region_name: Optional[str] = None
     building: BuildingInfo
     peer_group: Optional[PeerGroupInfo] = None
     energy_summary: EnergySummary

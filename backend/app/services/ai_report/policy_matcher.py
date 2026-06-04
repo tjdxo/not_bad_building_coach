@@ -172,6 +172,21 @@ def match_policies(
     user_answers: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     answers = user_answers or {}
+    region = _text(building.get("region")) or "seoul"
+    if region == "incheon":
+        return {
+            "policy_matches": [],
+            "policy_needs_more_info": [],
+            "missing_policy_inputs": [],
+            "policy_candidates_count": 0,
+            "policy_summary": {
+                "recommended_count": 0,
+                "needs_more_info_count": 0,
+                "score_note": "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 표시하지 않습니다.",
+                "excluded_note": "인천 지원사업 데이터가 연결되기 전까지 정책 추천은 비워둡니다.",
+                "regional_note": "인천 지원사업은 아직 연결되지 않았습니다.",
+            },
+        }
     over_15, over_10 = _age_flags(building, answers)
     residential = _is_residential(building, answers)
     public = _is_public(answers)
@@ -353,5 +368,6 @@ def match_policies(
             "needs_more_info_count": len(needs_more_info),
             "score_note": "fit_score는 실제 합격률이 아니라 내부 참고용 정책 적합도입니다.",
             "excluded_note": "건물 온실가스 총량제는 직접 지원 혜택이 아니므로 추천 정책에서 제외합니다.",
+            "regional_note": "서울 건물은 서울시 및 전국 공통 에너지 지원사업 기준으로 참고 표시합니다.",
         },
     }
