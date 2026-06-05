@@ -278,7 +278,7 @@ export default async function ComparePage({
     ["유사군 순위", peerRankLabel],
     ["유사군 수", peerBenchmark?.peer_count ? `${formatNumber(peerBenchmark.peer_count)}개` : "산정 불가"],
     ["상대 등급", peerBenchmark?.relative_grade?.grade || "산정 불가"],
-    ["절대 등급", incheon ? "공식 등급 미산정" : peerBenchmark?.absolute_grade?.grade || "산정 불가"],
+    ["절대 등급", peerBenchmark?.absolute_grade?.grade || "산정 불가"],
     ["신뢰도", peerBenchmark?.reliability_label || "산정 불가"],
   ];
 

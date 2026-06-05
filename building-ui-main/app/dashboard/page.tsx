@@ -472,10 +472,6 @@ function isIncheonPeerBenchmark(peerBenchmark?: PeerBenchmark | null) {
 }
 
 function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
-  if (isIncheonPeerBenchmark(peerBenchmark)) {
-    return { value: "공식 등급 미산정", desc: "인천 공식 절대등급 없음" };
-  }
-
   const absoluteGrade = peerBenchmark?.absolute_grade;
   const status = absoluteGrade?.status || absoluteGrade?.seoul_grade_applicability;
 
@@ -497,13 +493,13 @@ function absoluteGradeSummary(peerBenchmark?: PeerBenchmark | null) {
 
   return {
     value: absoluteGrade.grade,
-    desc: "서울시 및 공공 데이터 기반 자체 산정",
+    desc: status === "seoul_reference" ? "서울 등급제 참고 기준" : "서울시 및 공공 데이터 기반 자체 산정",
   };
 }
 
 function absoluteGradeReason(status?: string | null) {
-  if (status === "official_not_assessed") {
-    return "기준 설명: 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.";
+  if (status === "seoul_reference") {
+    return "기준 설명: 서울시 건물 에너지 등급제의 A~E 해석 체계를 참고해 인천 데이터에 적용한 자체 참고등급입니다. 공식 인증 등급은 아니며, 같은 기준의 타 지역 확산 가능성을 검토할 수 있습니다.";
   }
 
   if (!status) {
@@ -520,9 +516,6 @@ function absoluteGradeReason(status?: string | null) {
 }
 
 function shouldShowAbsoluteGrade(peerBenchmark?: PeerBenchmark | null) {
-  if (isIncheonPeerBenchmark(peerBenchmark)) {
-    return false;
-  }
   const absoluteGrade = peerBenchmark?.absolute_grade;
   return Boolean(peerBenchmark?.has_data && absoluteGrade?.grade);
 }
@@ -590,7 +583,7 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     value: absoluteGradeSummary(peerBenchmark).value,
     lines: [
       isIncheonPeerBenchmark(peerBenchmark)
-        ? "절대 등급: 공식 등급 미산정"
+        ? "절대 등급: 서울 등급제 참고 기준"
         : absoluteGrade?.grade_type && absoluteGrade?.area_band
         ? `서울시 기준 ${absoluteGrade.grade_type} / ${absoluteGrade.area_band}㎡ 구간`
         : absoluteGradeSummary(peerBenchmark).desc,
@@ -615,12 +608,12 @@ function buildBenchmarkDetails(peerBenchmark?: PeerBenchmark | null) {
     title: "분석 기준 안내",
     value: "참고용",
     lines: isIncheonPeerBenchmark(peerBenchmark) ? [
-      "절대 등급: 공식 등급 미산정",
+      "절대 등급: 서울시 건물 에너지 등급제의 A~E 해석 체계를 참고한 자체 참고등급",
       `상대 등급: ${peerBasis}`,
-      "기준 설명: 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.",
+      "기준 설명: 인천 참고등급은 공식 인증 등급은 아니며, 같은 기준의 타 지역 확산 가능성을 검토할 수 있는 참고 지표입니다.",
       "비교군: 용도, 연면적, 층수, 구조, 세대/호수, 지역지구 등 사용 가능한 건물 속성을 기반으로 구성합니다.",
       "AI 추정 진단: 실측 에너지 데이터가 부족한 건물은 CatBoost 기반 추정 모델과 유사건물 중앙값을 활용해 참고용 사용량을 추정합니다.",
-      "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 인천 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
+      "본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, 공식 등급 또는 법적 효력을 갖는 인증 결과가 아닙니다.",
     ] : [
       "절대 등급: 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다.",
       "상대 등급: 서울시 건물 데이터에서 용도·연면적·층수·구조 등 조건이 유사한 건물군을 구성하고, 그 유사군 내 에너지 사용량 분포를 기준으로 산정한 참고용 상대등급입니다.",
@@ -925,13 +918,13 @@ function AiEstimatedDashboard({
           <div className="mt-4 space-y-3 text-sm font-semibold leading-7 text-slate-600">
             <p>
               {isIncheon
-                ? "절대 등급: 공식 등급 미산정. 인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다."
+                ? "절대 등급은 서울시 건물 에너지 등급제의 A~E 해석 체계를 참고해 인천 데이터에 적용한 자체 참고등급입니다. 공식 인증 등급은 아니며, 같은 기준의 타 지역 확산 가능성을 검토할 수 있습니다."
                 : "절대 등급은 서울시 건물 에너지 신고·등급제 및 기후동행건물 프로젝트의 취지와 건물 유형별·규모별 에너지원단위 등급 체계를 참고합니다."}
             </p>
             <p>{isIncheon ? `상대 등급은 ${basisLabel}입니다.` : "상대 등급은 서울시 내 유사 건물군 기준입니다."}</p>
             <p>AI 추정 진단은 CatBoost 기반 추정 모델과 유사건물 중앙값, 서비스 기준값을 함께 활용한 참고용 결과입니다.</p>
             <p>가스는 난방방식, 지역난방 여부, 온수·취사 방식에 따라 오차가 커질 수 있으므로 실제 고지서 확인이 필요합니다.</p>
-            <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, {isIncheon ? "인천 공식 등급" : "서울시 공식 등급"} 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
+            <p>본 서비스의 등급과 진단 결과는 공공데이터 및 자체 분석 로직을 기반으로 한 참고용 결과이며, {isIncheon ? "공식 인증 등급" : "서울시 공식 등급"} 또는 법적 효력을 갖는 인증 결과가 아닙니다.</p>
           </div>
         </section>
 
@@ -1173,7 +1166,7 @@ export default async function DashboardPage({
   });
   const regionName = reportRegionName(report);
   const basisLabel = peerBasisLabel(report);
-  const policyRecommendations = isIncheonReport(report) ? [] : buildPolicyRecommendations(report);
+  const policyRecommendations = buildPolicyRecommendations(report);
   const contractorRecommendations = buildContractorRecommendations(report, policyRecommendations);
   return (
     <main className="min-h-screen pb-16">
@@ -1283,9 +1276,14 @@ export default async function DashboardPage({
               </div>
 
               <div className="grid gap-8">
-                {policyRecommendations.length > 0 && (
-                  <PolicyRecommendationCard recommendations={policyRecommendations} />
-                )}
+                <PolicyRecommendationCard
+                  recommendations={policyRecommendations}
+                  emptyMessage={
+                    isIncheonReport(report)
+                      ? "현재 공공데이터만으로는 자동 매칭 가능한 인천 지원사업이 부족합니다. 건물 소유관계, 설비 정보, 최신 공고를 확인하면 추가 검토가 가능합니다."
+                      : undefined
+                  }
+                />
                 <ContractorRecommendationCard recommendations={contractorRecommendations} />
               </div>
             </section>

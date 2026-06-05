@@ -4,7 +4,8 @@ export type PolicyRecommendation = {
   id: string;
   name: string;
   shortLabel: string;
-  status: "검토 가능" | "대상 여부 확인" | "추가 확인" | "참여 가능" | "참고";
+  status: "검토 가능" | "대상 여부 확인" | "추가 확인" | "참여 가능" | "참고" | "참고용";
+  regionLabel?: "인천" | "전국 공통" | "서울";
   categories: string[];
   description: string;
   matchReason: string;
@@ -28,6 +29,10 @@ function buildingText(report: ReportApiResponse) {
     report.building.jibun_address,
     report.building.bld_nm,
     report.building.dong_nm,
+    report.building.purp_nm,
+    report.building.main_purpose,
+    report.building.sgg_cd_nm,
+    report.building.bjd_cd_nm,
   ]
     .filter(Boolean)
     .join(" ");
@@ -48,9 +53,192 @@ function addCandidate(candidates: PolicyCandidate[], candidate: PolicyCandidate)
   candidates.push(candidate);
 }
 
+function numberValue(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function incheonElectricOveruse(report: ReportApiResponse) {
+  const electric = report.ai_diagnosis?.electric;
+  const comparePct = numberValue(electric?.compare_pct);
+  const percentile = numberValue(electric?.percentile ?? report.peer_benchmark?.electricity?.percentile);
+  const peerPct = numberValue(report.peer_benchmark?.electricity?.vs_peer_pct);
+  const overuseType = report.peer_benchmark?.peer_overuse_type || "";
+  return Boolean(
+    (comparePct !== null && comparePct > 0) ||
+      (percentile !== null && percentile >= 60) ||
+      (peerPct !== null && peerPct > 0) ||
+      overuseType.includes("전기"),
+  );
+}
+
+function incheonReceptionNote(report: ReportApiResponse) {
+  const text = buildingText(report);
+  return text.includes("옹진군") || text.includes("계양구")
+    ? "접수처는 시 신재생에너지과 확인이 필요합니다."
+    : "접수처는 각 구청 담당부서 확인이 필요합니다.";
+}
+
+function buildIncheonPolicyRecommendations(report: ReportApiResponse): PolicyRecommendation[] {
+  const text = buildingText(report);
+  const approvalYear = Number(report.building.approval_year || 0);
+  const currentYear = new Date().getFullYear();
+  const buildingAge = approvalYear > 0 ? currentYear - approvalYear : null;
+  const old10 = buildingAge !== null && buildingAge >= 10;
+  const electricOveruse = incheonElectricOveruse(report);
+  const residential = textIncludesAny(text, ["단독주택", "공동주택", "다가구", "다가구주택", "다세대", "다세대주택", "아파트", "연립주택", "주택"]);
+  const multiFamily = textIncludesAny(text, ["공동주택", "아파트", "다세대", "다세대주택", "연립주택"]);
+  const detached = textIncludesAny(text, ["단독주택", "다가구", "다가구주택"]);
+  const neighborhood = textIncludesAny(text, ["근린생활시설", "상가주택", "제1종근린생활시설", "제2종근린생활시설"]);
+  const singleHouse = textIncludesAny(text, ["단독주택", "다가구주택", "다가구", "주택"]);
+  const publicLike = textIncludesAny(text, ["도서관", "보건소", "노유자시설", "교육연구시설", "공공업무시설", "수련시설", "문화 및 집회시설"]);
+  const nonResidentialEers = textIncludesAny(text, ["근린생활시설", "업무시설", "판매시설", "공장", "교육연구시설", "노유자시설"]);
+  const michuhol = text.includes("미추홀구");
+  const candidates: PolicyCandidate[] = [];
+
+  addCandidate(candidates, {
+    id: "incheon_2026_mini_solar",
+    name: "2026년 인천광역시 미니태양광 보급사업",
+    shortLabel: "인천 미니태양광",
+    status: residential ? "검토 가능" : "추가 확인",
+    regionLabel: "인천",
+    categories: ["신재생에너지", residential ? "주택성 건물" : neighborhood ? "기타 건축물" : "용도 확인", "공고 확인"],
+    description:
+      "인천 소재 건축물은 미니태양광 445W 또는 890W 설비 설치비 지원사업을 검토할 수 있습니다. 일반 신청은 시비 60%, 구비 20%, 자부담 20% 구조이며, 공동주택 단체신청 또는 경비실은 별도 지원비율이 적용될 수 있습니다.",
+    matchReason:
+      residential || neighborhood
+        ? `인천 소재 건축물이고 건물 용도상 설치 지원 검토 후보입니다. ${incheonReceptionNote(report)}`
+        : `인천 소재 건축물로 대상 지역에는 해당하지만, 실제 설치 가능 용도와 현장 조건 확인이 필요합니다. ${incheonReceptionNote(report)}`,
+    requiredChecks: [
+      "과거 5년 이내 동일 건축물·소유주 기준 보조금 지급 여부",
+      "소유권 분쟁 여부",
+      "설치 공간과 일조량",
+      "안전 확보 여부",
+      "공동주택 관리주체 동의 여부",
+      "불법 건축물 여부",
+    ],
+    officialUrl: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/352000000103",
+    score:
+      30 +
+      (residential ? 30 : 0) +
+      (multiFamily ? 25 : 0) +
+      (detached ? 25 : 0) +
+      (neighborhood ? 10 : 0) +
+      (electricOveruse ? 20 : 0) -
+      5,
+  });
+
+  if (singleHouse) {
+    addCandidate(candidates, {
+      id: "incheon_renewable_home_support",
+      name: "인천 신재생에너지 설비 지원",
+      shortLabel: "신재생 설비 지원",
+      status: "검토 가능",
+      regionLabel: "인천",
+      categories: ["신재생에너지", "단독주택", "공고 확인"],
+      description:
+        "인천광역시 단독주택은 태양광·태양열·지열 등 신재생에너지 설비 설치비 지원사업을 검토할 수 있습니다.",
+      matchReason:
+        electricOveruse
+          ? "전기 사용량이 큰 주택성 건물로 신재생에너지 설비 검토 필요성이 있습니다."
+          : "단독주택 또는 주택성 건물로 설치 가능 면적과 소유관계 확인 후 검토할 수 있습니다.",
+      requiredChecks: ["소유관계", "설치 가능 면적", "한국에너지공단 접수 조건", "최신 공고"],
+      officialUrl: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/628000000134",
+      score: 55 + (electricOveruse ? 20 : 0),
+    });
+  }
+
+  if (michuhol && singleHouse) {
+    addCandidate(candidates, {
+      id: "michuhol_renewable_home_support",
+      name: "미추홀구 신재생에너지 주택지원사업",
+      shortLabel: "미추홀 주택지원",
+      status: "추가 확인",
+      regionLabel: "인천",
+      categories: ["신재생에너지", "미추홀구", "참고용"],
+      description:
+        "미추홀구 소재 단독주택은 신재생에너지 주택지원사업을 참고할 수 있습니다. 다만 예산 소진 또는 접수 종료 가능성이 있습니다.",
+      matchReason: "미추홀구 소재 주택성 건물이므로 참고 후보이나, 최신 공고 확인이 우선입니다.",
+      requiredChecks: ["예산 소진 여부", "접수 종료 여부", "한국에너지공단 주택지원사업 연계 여부", "최신 공고"],
+      officialUrl: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/351050000114",
+      score: 48 + (electricOveruse ? 10 : 0),
+    });
+  }
+
+  if (publicLike || old10) {
+    addCandidate(candidates, {
+      id: "public_green_remodeling",
+      name: "공공건축물 그린리모델링",
+      shortLabel: "그린리모델링",
+      status: "추가 확인",
+      regionLabel: "전국 공통",
+      categories: ["그린리모델링", publicLike ? "공공시설 후보" : "공공성 확인", old10 ? "10년 이상" : "연식 확인"],
+      description:
+        "사용승인 후 10년 이상 경과한 공공건축물은 그린리모델링 지원사업 검토 대상이 될 수 있습니다.",
+      matchReason:
+        publicLike && old10
+          ? "용도와 연식상 노후 공공건축물 후보로 볼 수 있으나, 공공건축물 여부 확인이 필요합니다."
+          : "공공건축물 여부와 사용승인일 확인 후 검토할 수 있습니다.",
+      requiredChecks: ["공공건축물 여부", "세부 용도", "사용승인 후 10년 이상 경과 여부", "해당 연도 공고"],
+      officialUrl: "https://www.greenremodeling.or.kr",
+      score: 35 + (publicLike ? 25 : 0) + (old10 ? 20 : 0),
+    });
+  }
+
+  if (electricOveruse) {
+    addCandidate(candidates, {
+      id: "kepco_eers",
+      name: "한전 에너지효율향상사업 / EERS",
+      shortLabel: "한전 EERS",
+      status: "검토 가능",
+      regionLabel: "전국 공통",
+      categories: ["고효율기기", nonResidentialEers ? "비주거 가산" : "설비 확인", "공고 확인"],
+      description:
+        "전기 사용량이 유사 건물보다 높은 건물은 LED, 인버터, 변압기 등 고효율기기 교체 지원사업을 검토할 수 있습니다.",
+      matchReason:
+        nonResidentialEers
+          ? "전기 사용량이 높고 비주거 용도로 보여 고효율기기 교체 검토와 연결될 수 있습니다."
+          : "전기 사용량이 유사 건물보다 높아 지원 품목과 설비 보유 여부 확인이 필요합니다.",
+      requiredChecks: ["지원 품목", "설비 보유 현황", "해당 연도 한전 공고", "신청 한도"],
+      score: 55 + (nonResidentialEers ? 20 : 0),
+    });
+  }
+
+  if (residential) {
+    addCandidate(candidates, {
+      id: "carbon_neutral_point_energy",
+      name: "탄소중립포인트 에너지",
+      shortLabel: "탄소중립포인트",
+      status: "참고용",
+      regionLabel: "전국 공통",
+      categories: ["인센티브", "주택", "사용량 절감"],
+      description:
+        "전기·가스 사용량을 지속적으로 줄이면 탄소중립포인트 에너지 분야 인센티브를 검토할 수 있습니다.",
+      matchReason: "주택 또는 공동주택 계열은 에너지 절감 실천 인센티브를 참고할 수 있습니다.",
+      requiredChecks: ["가입 여부", "과거 사용량 대비 절감률", "제도 기준", "실제 사용자 정보"],
+      score: 42 + (electricOveruse ? 8 : 0),
+    });
+  }
+
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      shortLabel: candidate.shortLabel,
+      status: candidate.status,
+      regionLabel: candidate.regionLabel,
+      categories: candidate.categories,
+      description: candidate.description,
+      matchReason: candidate.matchReason,
+      requiredChecks: candidate.requiredChecks,
+      officialUrl: candidate.officialUrl,
+    }));
+}
+
 export function buildPolicyRecommendations(report: ReportApiResponse): PolicyRecommendation[] {
   if (isIncheonReport(report)) {
-    return [];
+    return buildIncheonPolicyRecommendations(report);
   }
 
   const text = buildingText(report);

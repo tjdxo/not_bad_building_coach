@@ -232,7 +232,7 @@ function withoutSeoulPolicyLabels(recommendations: ContractorRecommendation[]) {
   return recommendations.map((item) => ({
     ...item,
     name: item.name === "서울 LED 리뉴얼" ? "LED 조명 리뉴얼" : item.name,
-    relatedPolicy: "인천 지원사업 데이터 연결 전",
+    relatedPolicy: "인천·전국 지원사업 검토",
   }));
 }
 

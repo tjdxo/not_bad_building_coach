@@ -220,14 +220,15 @@ def build_peer_context(row: Optional[Dict[str, Any]], region: str = "seoul") -> 
 
 def build_grade_context(row: Optional[Dict[str, Any]], region: str = "seoul") -> Dict[str, Any]:
     if region == "incheon":
+        reference_grade = relative_grade_from_percentile(safe_float((row or {}).get("total_percentile")))
         return {
-            "absolute_grade": None,
-            "absolute_grade_status": "official_not_assessed",
-            "absolute_grade_type": None,
-            "absolute_energy_intensity": None,
-            "relative_grade": relative_grade_from_percentile(safe_float((row or {}).get("total_percentile"))),
+            "absolute_grade": reference_grade,
+            "absolute_grade_status": "seoul_reference",
+            "absolute_grade_type": "서울 등급제 참고 기준",
+            "absolute_energy_intensity": safe_float((row or {}).get("target_total_per_area")),
+            "relative_grade": reference_grade,
             "relative_grade_basis": "인천시 내 유사 건물군 기준",
-            "basis_caution": "공식 인천 건물 에너지 절대등급은 확인되지 않아, 본 서비스에서는 공공데이터와 유사건물 비교 기반의 참고등급 및 상대등급을 제공합니다.",
+            "basis_caution": "인천 절대등급은 서울시 건물 에너지 등급제의 A~E 해석 체계를 참고해 적용한 자체 참고등급이며, 공식 인증 등급은 아닙니다. 동일 기준의 타 지역 확산 가능성을 검토할 수 있습니다.",
         }
     if not row:
         return {
@@ -278,6 +279,8 @@ def build_ai_report_context(
             "building_id": building.get("building_id"),
             "region": region,
             "region_name": region_name,
+            "sgg_cd_nm": building.get("sgg_cd_nm"),
+            "bjd_cd_nm": building.get("bjd_cd_nm"),
             "address": building.get("display_address"),
             "road_address": building.get("road_address"),
             "jibun_address": building.get("plat_plc"),
@@ -304,7 +307,7 @@ def build_ai_report_context(
         "report_rules": {
             "legal_effect": "본 제공 데이터는 법적 효력을 가지지 않으며, 단순 참고용으로만 활용해 주세요.",
             "official_grade_caution": (
-                "인천 공식 절대등급, 인증, 지원사업 선정 결과를 의미하지 않습니다."
+                "인천 참고 절대등급은 서울 등급제 해석 체계를 참고한 자체 참고등급이며, 공식 인증 또는 지원사업 선정 결과를 의미하지 않습니다."
                 if region == "incheon"
                 else "서울시 공식 등급, 인증, 지원사업 선정 결과를 의미하지 않습니다."
             ),
@@ -314,7 +317,7 @@ def build_ai_report_context(
                 else "서울시 건물 공공데이터와 서울시 내 유사 건물군 비교를 기반으로 한 참고용 결과입니다."
             ),
             "policy_basis": (
-                "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 정책 추천을 비워둡니다."
+                "인천 건물은 인천광역시 지원사업과 전국 공통 사업 후보를 검토 가능 또는 추가 확인 필요 톤으로 표현합니다."
                 if region == "incheon"
                 else "서울시 및 전국 공통 에너지 지원사업 기준으로 표현합니다."
             ),

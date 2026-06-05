@@ -215,19 +215,20 @@ def _first_present(row: Dict[str, Any], *keys: str) -> Any:
 
 def _build_absolute_grade_response(row: Dict[str, Any], region: str) -> Dict[str, Any]:
     if region == "incheon":
+        reference_grade = _relative_grade_from_percentile(_coerce_float_or_none(row.get("total_percentile")))
         return {
-            "grade_type": None,
+            "grade_type": "서울 등급제 참고 기준",
             "area_band": None,
-            "energy_intensity": None,
-            "grade": None,
-            "status": "official_not_assessed",
+            "energy_intensity": _coerce_float_or_none(row.get("target_total_per_area")),
+            "grade": reference_grade,
+            "status": "seoul_reference",
             "seoul_grade_applicability": None,
             "threshold_A": None,
             "threshold_B": None,
             "threshold_C": None,
             "threshold_D": None,
-            "basis_label": "공식 등급 미산정",
-            "description": "인천은 공식 사용량 기반 절대등급이 확인되지 않아, 본 서비스에서는 유사건물 비교와 참고 기준등급 중심으로 제공합니다.",
+            "basis_label": "서울 등급제 참고 기준",
+            "description": "서울시 건물 에너지 등급제의 A~E 해석 체계를 참고해 인천 데이터에 적용한 자체 참고등급입니다. 공식 인증 등급은 아니며, 향후 동일 기준의 타 지역 확산 가능성을 검토할 수 있습니다.",
         }
 
     return {
@@ -516,6 +517,8 @@ def _master_building_info(item: Dict[str, Any], fallback_address: str = "") -> D
         "floors": int(item.get("agnd_flr") or 0),
         "elevator_count": 0,
         "display_address": display_address,
+        "sgg_cd_nm": item.get("sgg_cd_nm"),
+        "bjd_cd_nm": item.get("bjd_cd_nm"),
         "plat_plc": item.get("plat_plc"),
         "bld_nm": item.get("bld_nm"),
         "dong_nm": item.get("dong_nm"),

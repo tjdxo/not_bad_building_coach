@@ -29,6 +29,8 @@ class BuildingInfo(BaseModel):
     elevator_count: int
     building_id: Optional[Any] = None
     display_address: Optional[str] = None
+    sgg_cd_nm: Optional[str] = None
+    bjd_cd_nm: Optional[str] = None
     plat_plc: Optional[str] = None
     bld_nm: Optional[str] = None
     dong_nm: Optional[str] = None

@@ -39,7 +39,6 @@ const EXCLUDED_ABSOLUTE_STATUSES = new Set([
   "excluded_residential",
   "under_3000_out_of_scope",
   "excluded",
-  "official_not_assessed",
   "산정 예정",
   "적용 제외",
 ]);
@@ -56,9 +55,6 @@ function hasExcludedAbsoluteStatus(value?: string | null) {
 }
 
 function absoluteMissingDescription(status?: string | null) {
-  if (String(status ?? "").trim() === "official_not_assessed") {
-    return "공식 인천 건물 에너지 절대등급은 확인되지 않아, 유사건물 비교 기반의 참고등급과 상대등급을 함께 확인해 주세요.";
-  }
   if (hasExcludedAbsoluteStatus(status)) {
     return "서울시 절대등급 적용 대상이 아니거나, 현재 기준에서 공식 절대등급을 산정하지 않는 건물입니다.";
   }
@@ -75,13 +71,16 @@ export function getAbsoluteGradeVisual(input: {
 }): GradeVisual {
   const absoluteGrade = normalizeGrade(input.absoluteGrade);
   if (absoluteGrade) {
+    const reference = String(input.absoluteStatus ?? "").trim() === "seoul_reference";
     return {
       grade: absoluteGrade,
       source: "absolute",
       imageSrc: GRADE_IMAGE_MAP[absoluteGrade],
       title: ABSOLUTE_GRADE_TEXT[absoluteGrade],
-      description: "서울시 건물 에너지 등급 기준을 참고해 산정한 절대 기준의 등급입니다.",
-      basisLabel: `절대 등급 ${absoluteGrade} 기준`,
+      description: reference
+        ? "서울시 건물 에너지 등급제의 A~E 해석 체계를 참고해 적용한 자체 참고등급입니다. 공식 인증 등급은 아닙니다."
+        : "서울시 건물 에너지 등급 기준을 참고해 산정한 절대 기준의 등급입니다.",
+      basisLabel: reference ? `참고 절대 등급 ${absoluteGrade} 기준` : `절대 등급 ${absoluteGrade} 기준`,
     };
   }
 

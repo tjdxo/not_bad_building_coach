@@ -5,8 +5,10 @@ import type { PolicyRecommendation } from "@/lib/policy-recommendations";
 
 export function PolicyRecommendationCard({
   recommendations,
+  emptyMessage = "현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 확인하면 더 정확한 정책 검토가 가능합니다.",
 }: {
   recommendations: PolicyRecommendation[];
+  emptyMessage?: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(recommendations[0]?.id ?? null);
 
@@ -18,6 +20,11 @@ export function PolicyRecommendationCard({
       </p>
 
       <div className="mt-6 space-y-3">
+        {recommendations.length === 0 && (
+          <div className="rounded-2xl bg-white/10 p-4 text-sm font-semibold leading-6 text-slate-300">
+            {emptyMessage}
+          </div>
+        )}
         {recommendations.map((policy) => {
           const open = openId === policy.id;
           return (
@@ -32,9 +39,16 @@ export function PolicyRecommendationCard({
                     <h3 className="text-base font-black text-white">{policy.shortLabel}</h3>
                     <p className="mt-1 text-sm font-semibold text-slate-300">{policy.name}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-black text-emerald-200">
-                    {policy.status}
-                  </span>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {policy.regionLabel && (
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200">
+                        {policy.regionLabel}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-black text-emerald-200">
+                      {policy.status}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {policy.categories.slice(0, 3).map((category) => (

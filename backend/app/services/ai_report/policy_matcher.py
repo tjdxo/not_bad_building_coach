@@ -149,18 +149,266 @@ def _match_support_items(policy: Dict[str, Any], interests: List[str]) -> List[s
 
 
 def _summary_match(policy: Dict[str, Any], score: int, reasons: List[str], missing: List[str]) -> Dict[str, Any]:
+    bounded_score = max(0, min(100, score))
     return {
         "policy_id": policy["policy_id"],
         "policy_name": policy["policy_name"],
         "category": policy["category"],
         "benefit_type": policy["benefit_type"],
-        "fit_score": max(0, min(100, score)),
-        "fit_label": _fit_label(max(0, min(100, score))),
+        "fit_score": bounded_score,
+        "fit_label": policy.get("fit_label") or _fit_label(bounded_score),
         "matched_reasons": reasons[:3],
-        "missing_checks": missing[:3],
-        "recommended_next_step": "공식 안내와 최신 공고문에서 세부 대상, 한도, 신청 절차를 확인하세요.",
+        "missing_checks": missing[:6],
+        "recommended_next_step": policy.get("recommended_next_step") or "공식 안내와 최신 공고문에서 세부 대상, 한도, 신청 절차를 확인하세요.",
         "official_url": policy.get("official_url"),
         "caution": policy.get("caution"),
+    }
+
+
+def _contains_any(value: str, keywords: List[str]) -> bool:
+    return any(keyword in value for keyword in keywords)
+
+
+def _building_text(building: Dict[str, Any]) -> str:
+    return " ".join(
+        [
+            _text(building.get("sgg_cd_nm")),
+            _text(building.get("bjd_cd_nm")),
+            _text(building.get("address")),
+            _text(building.get("road_address")),
+            _text(building.get("jibun_address")),
+            _text(building.get("purpose")),
+            _text(building.get("purp_nm")),
+            _text(building.get("main_purpose")),
+        ]
+    )
+
+
+def _electric_overuse_for_incheon(peer_benchmark: Dict[str, Any], ai_estimate: Dict[str, Any]) -> bool:
+    electric = ai_estimate.get("electric") or {}
+    compare_pct = _parse_number(electric.get("compare_pct"))
+    percentile = _parse_number(electric.get("percentile"))
+    peer_pct = _parse_number(peer_benchmark.get("electric_vs_peer_pct"))
+    peer_percentile = _parse_number(peer_benchmark.get("electric_percentile"))
+    overuse_type = _text(peer_benchmark.get("peer_overuse_type"))
+    return bool(
+        (compare_pct is not None and compare_pct > 0)
+        or (percentile is not None and percentile >= 60)
+        or (peer_pct is not None and peer_pct > 0)
+        or (peer_percentile is not None and peer_percentile >= 60)
+        or ("전기" in overuse_type)
+    )
+
+
+def _incheon_reception_note(building: Dict[str, Any]) -> str:
+    district = _text(building.get("sgg_cd_nm")) or _text(building.get("address"))
+    if "옹진군" in district or "계양구" in district:
+        return "접수처 안내: 옹진군·계양구는 시 신재생에너지과 확인이 필요합니다."
+    return "접수처 안내: 각 구청 담당부서 확인이 필요합니다."
+
+
+def _incheon_policy(
+    policy_id: str,
+    policy_name: str,
+    category: str,
+    benefit_type: str,
+    fit_label: str,
+    score: int,
+    reasons: List[str],
+    missing: List[str],
+    official_url: Optional[str],
+    caution: str,
+) -> Dict[str, Any]:
+    return _summary_match(
+        {
+            "policy_id": policy_id,
+            "policy_name": policy_name,
+            "category": category,
+            "benefit_type": benefit_type,
+            "fit_label": fit_label,
+            "official_url": official_url,
+            "caution": caution,
+            "recommended_next_step": "지원 확정이 아니므로 최신 공고문, 접수처, 설치 가능 조건을 확인하세요.",
+        },
+        score,
+        reasons,
+        missing,
+    )
+
+
+def _match_incheon_policies(
+    building: Dict[str, Any],
+    peer_benchmark: Dict[str, Any],
+    ai_estimate: Dict[str, Any],
+    user_answers: Dict[str, Any],
+) -> Dict[str, Any]:
+    text = _building_text(building)
+    over_15, over_10 = _age_flags(building, user_answers)
+    electric_overuse = _electric_overuse_for_incheon(peer_benchmark, ai_estimate)
+    residential = _contains_any(text, ["단독주택", "공동주택", "다가구", "다가구주택", "다세대", "다세대주택", "아파트", "연립주택", "주택"])
+    multi_family = _contains_any(text, ["공동주택", "아파트", "다세대", "다세대주택", "연립주택"])
+    detached = _contains_any(text, ["단독주택", "다가구", "다가구주택"])
+    neighborhood = _contains_any(text, ["근린생활시설", "상가주택", "제1종근린생활시설", "제2종근린생활시설"])
+    non_residential_eers = _contains_any(text, ["근린생활시설", "업무시설", "판매시설", "공장", "교육연구시설", "노유자시설"])
+    public_like = _contains_any(text, ["도서관", "보건소", "노유자시설", "교육연구시설", "공공업무시설", "수련시설", "문화 및 집회시설"])
+    single_house = _contains_any(text, ["단독주택", "다가구주택", "다가구", "주택"])
+    michuhol = "미추홀구" in text
+
+    installation_checks = [
+        "과거 5년 이내 동일 건축물·소유주 기준 보조금 지급 여부",
+        "소유권 분쟁 여부",
+        "설치 공간 협소 여부",
+        "일조량 부족 여부",
+        "안전 확보 여부",
+        "공동주택 관리주체 동의 여부",
+        "불법 건축물 여부",
+    ]
+    matches: List[Dict[str, Any]] = []
+    needs_more_info: List[Dict[str, Any]] = []
+
+    mini_score = 30
+    mini_reasons = ["인천 소재 건축물로 2026년 인천광역시 미니태양광 보급사업 검토 대상 지역입니다."]
+    if residential:
+        mini_score += 30
+        mini_reasons.append("건물 용도상 주택 계열로 분류되어 검토 후보입니다.")
+    if multi_family:
+        mini_score += 25
+        mini_reasons.append("공동주택·아파트·다세대·연립 계열은 단체신청 또는 경비실 별도 신청 가능성을 확인할 수 있습니다.")
+    elif detached:
+        mini_score += 25
+        mini_reasons.append("단독주택·다가구주택 계열은 미니태양광 설치비 지원 검토 후보입니다.")
+    elif neighborhood:
+        mini_score += 10
+        mini_reasons.append("근린생활시설 등 기타 건축물도 공고상 인천 소재 건축물로 설치 가능성 확인이 필요합니다.")
+    else:
+        mini_score += 5
+        mini_reasons.append("공고상 인천 소재 건축물 대상이나, 실제 용도와 설치 가능성 확인이 필요합니다.")
+    if electric_overuse:
+        mini_score += 20
+        mini_reasons.append("전기 사용량이 유사 건물보다 높아 자가소비형 신재생에너지 검토 필요성이 있습니다.")
+    mini_score -= 5
+    matches.append(
+        _incheon_policy(
+            "incheon_2026_mini_solar",
+            "2026년 인천광역시 미니태양광 보급사업",
+            "신재생에너지",
+            "미니태양광 설치비 일부 지원",
+            "검토 가능" if residential else "추가 확인 필요",
+            mini_score,
+            mini_reasons + [_incheon_reception_note(building)],
+            installation_checks,
+            "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/352000000103",
+            "선착순 접수와 예산 소진 여부, 설치 공간·일조량·안전성·관리주체 동의 확인이 필요합니다.",
+        )
+    )
+
+    if single_house:
+        score = 55 + (20 if electric_overuse else 0)
+        matches.append(
+            _incheon_policy(
+                "incheon_renewable_home_support",
+                "인천 신재생에너지 설비 지원",
+                "신재생에너지",
+                "태양광·태양열·지열 등 설치비 지원",
+                "검토 가능",
+                score,
+                [
+                    "인천광역시 단독주택 또는 주택성 건물로 신재생에너지 설비 지원 검토 후보입니다.",
+                    "전기 사용량이 큰 주택성 건물은 태양광 등 설비 검토 필요성이 있습니다." if electric_overuse else "설치 가능 면적과 소유관계 확인 후 검토할 수 있습니다.",
+                ],
+                ["소유관계", "설치 가능 면적", "한국에너지공단 접수 조건", "최신 공고"],
+                "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/628000000134",
+                "실제 신청 가능 여부는 한국에너지공단 접수 조건과 최신 공고 확인이 필요합니다.",
+            )
+        )
+
+    if michuhol and single_house:
+        needs_more_info.append(
+            _incheon_policy(
+                "michuhol_renewable_home_support",
+                "미추홀구 신재생에너지 주택지원사업",
+                "신재생에너지",
+                "주택지원사업 연계 설치비 일부 지원",
+                "추가 확인 필요",
+                48 + (10 if electric_overuse else 0),
+                ["미추홀구 소재 단독주택은 신재생에너지 주택지원사업을 참고할 수 있습니다."],
+                ["예산 소진 여부", "접수 종료 여부", "한국에너지공단 주택지원사업 연계 여부", "최신 공고"],
+                "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/351050000114",
+                "예산 조기소진 또는 사업 종료 가능성이 있으므로 최신 공고 확인이 필요합니다.",
+            )
+        )
+
+    if public_like or over_10 is True:
+        needs_more_info.append(
+            _incheon_policy(
+                "public_green_remodeling",
+                "공공건축물 그린리모델링",
+                "그린리모델링",
+                "공공건축물 성능개선 사업",
+                "추가 확인 필요",
+                35 + (25 if public_like else 0) + (20 if over_10 is True else 0),
+                [
+                    "사용승인 후 10년 이상 경과한 공공건축물은 그린리모델링 지원사업 검토 대상이 될 수 있습니다."
+                    if over_10 is True
+                    else "용도상 공공시설 가능성이 있어 공공건축물 여부 확인이 필요합니다.",
+                ],
+                ["공공건축물 여부", "세부 용도", "사용승인 후 10년 이상 경과 여부", "해당 연도 공고"],
+                "https://www.greenremodeling.or.kr",
+                "민간 건축물에 확정 추천하지 않으며, 공공건축물 여부와 공고 확인이 필요합니다.",
+            )
+        )
+
+    if electric_overuse:
+        score = 55 + (20 if non_residential_eers else 0)
+        matches.append(
+            _incheon_policy(
+                "kepco_eers",
+                "한전 에너지효율향상사업 / EERS",
+                "고효율기기",
+                "LED·인버터·변압기 등 고효율기기 지원",
+                "검토 가능",
+                score,
+                [
+                    "전기 사용량이 유사 건물보다 높아 고효율기기 교체 검토가 필요합니다.",
+                    "비주거 용도는 LED, 인버터, 변압기 등 교체 지원 검토와 연결될 수 있습니다." if non_residential_eers else "지원 품목과 설비 보유 여부 확인이 필요합니다.",
+                ],
+                ["지원 품목", "설비 보유 현황", "해당 연도 한전 공고", "신청 한도"],
+                None,
+                "전국 공통 성격의 사업으로, 실제 지원 품목과 한도는 한전 공고 확인이 필요합니다.",
+            )
+        )
+
+    if residential:
+        needs_more_info.append(
+            _incheon_policy(
+                "carbon_neutral_point_energy",
+                "탄소중립포인트 에너지",
+                "인센티브",
+                "전기·가스·수도 절감 인센티브",
+                "참고용",
+                42 + (8 if electric_overuse else 0),
+                ["주택 또는 공동주택 계열은 에너지 절감 실천 인센티브를 참고할 수 있습니다."],
+                ["가입 여부", "과거 사용량 대비 절감률", "제도 기준", "실제 사용자 정보"],
+                None,
+                "전국 공통 성격의 인센티브로, 실제 지급은 절감률과 제도 기준에 따라 달라집니다.",
+            )
+        )
+
+    matches = sorted(matches, key=lambda item: item["fit_score"], reverse=True)[:4]
+    needs_more_info = sorted(needs_more_info, key=lambda item: item["fit_score"], reverse=True)[:4]
+    missing_inputs = sorted({check for item in matches + needs_more_info for check in item.get("missing_checks", [])})
+    return {
+        "policy_matches": matches,
+        "policy_needs_more_info": needs_more_info,
+        "missing_policy_inputs": missing_inputs,
+        "policy_candidates_count": 6,
+        "policy_summary": {
+            "recommended_count": len(matches),
+            "needs_more_info_count": len(needs_more_info),
+            "score_note": "fit_score는 실제 합격률이 아니라 내부 참고용 정책 적합도입니다.",
+            "excluded_note": "서울 전용 BRP, 새빛주택, 서울 건물 에너지 신고·등급제는 인천 건물에 표시하지 않습니다.",
+            "regional_note": "인천 정책은 검토 가능 후보이며, 지원 확정이 아니라 최신 공고와 접수처 확인이 필요합니다.",
+        },
     }
 
 
@@ -174,19 +422,7 @@ def match_policies(
     answers = user_answers or {}
     region = _text(building.get("region")) or "seoul"
     if region == "incheon":
-        return {
-            "policy_matches": [],
-            "policy_needs_more_info": [],
-            "missing_policy_inputs": [],
-            "policy_candidates_count": 0,
-            "policy_summary": {
-                "recommended_count": 0,
-                "needs_more_info_count": 0,
-                "score_note": "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 표시하지 않습니다.",
-                "excluded_note": "인천 지원사업 데이터가 연결되기 전까지 정책 추천은 비워둡니다.",
-                "regional_note": "인천 지원사업은 아직 연결되지 않았습니다.",
-            },
-        }
+        return _match_incheon_policies(building, peer_benchmark, ai_estimate, answers)
     over_15, over_10 = _age_flags(building, answers)
     residential = _is_residential(building, answers)
     public = _is_public(answers)

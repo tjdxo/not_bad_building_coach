@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import {
   createAiReport,
-  isIncheonReport,
   type AiGeneratedReport,
   type AiReportApiResponse,
   type AiReportAudience,
@@ -262,13 +261,13 @@ function aiPayloadIsIncheon(payload: AiReportApiResponse) {
 
 function emptyPolicyMessage(isIncheon: boolean) {
   return isIncheon
-    ? "현재 등록된 지원사업 후보는 서울 기준이므로 인천 건물에는 표시하지 않습니다. 인천 지원사업 데이터가 연결되기 전까지 정책 추천은 비워둡니다."
+    ? "현재 공공데이터만으로는 자동 매칭 가능한 인천 지원사업이 부족합니다. 건물 소유관계, 설비 정보, 최신 공고를 확인하면 추가 검토가 가능합니다."
     : "현재 입력 정보만으로는 높은 적합도의 지원사업을 찾기 어렵습니다. 추가 정보를 입력하면 더 정확한 정책 검토가 가능합니다.";
 }
 
 function policyCautionMessage(isIncheon: boolean) {
   return isIncheon
-    ? "인천 지원사업 데이터가 연결되기 전까지 정책 추천은 표시하지 않습니다."
+    ? "인천 지원사업 추천은 검토 후보이며, 실제 신청 가능 여부는 최신 공고와 접수처 확인이 필요합니다."
     : "지원사업 추천은 건물 정보와 진단 결과를 기준으로 제공되며, 실제 신청 가능 여부는 최신 공고문 확인이 필요합니다.";
 }
 
@@ -689,7 +688,6 @@ export function AiReportPanel({
   buttonLabel?: string;
 }) {
   const buildingId = hasBuildingId(report);
-  const incheonReport = isIncheonReport(report);
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [step, setStep] = useState<"choice" | "electric" | "gas" | "policy" | "review" | "result">("choice");
   const [electricAnswers, setElectricAnswers] = useState<Record<string, string | string[]>>({});
@@ -707,9 +705,9 @@ export function AiReportPanel({
     () => ({
       electric: electricAnswers,
       gas: gasAnswers,
-      policy: incheonReport ? {} : policyAnswers,
+      policy: policyAnswers,
     }),
-    [electricAnswers, gasAnswers, incheonReport, policyAnswers],
+    [electricAnswers, gasAnswers, policyAnswers],
   );
 
   function setAnswer(section: "electric" | "gas" | "policy", question: ChoiceQuestion, option: string) {
@@ -990,14 +988,14 @@ export function AiReportPanel({
                   <button type="button" onClick={() => setStep("electric")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
                     이전
                   </button>
-                  <button type="button" onClick={() => setStep(incheonReport ? "review" : "policy")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
+                  <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white">
                     다음
                   </button>
                 </div>
               </div>
             )}
 
-            {!incheonReport && step === "policy" && (
+            {step === "policy" && (
               <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
                 <div className="mb-5">
                   <p className="text-sm font-black text-emerald-600">Step 3</p>
@@ -1025,15 +1023,13 @@ export function AiReportPanel({
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   선택하지 않은 항목은 모름으로 해석하지 않고, 리포트에서 데이터 부족으로 다룹니다.
                 </p>
-                <div className={`mt-5 grid gap-4 ${incheonReport ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+                <div className="mt-5 grid gap-4 lg:grid-cols-3">
                   <AnswerSummarySection title="전기 사용 패턴" questions={electricQuestions} answers={electricAnswers} />
                   <AnswerSummarySection title="가스/난방 사용 패턴" questions={gasQuestions} answers={gasAnswers} />
-                  {!incheonReport && (
-                    <AnswerSummarySection title="정책 매칭 정보" questions={policyQuestions} answers={policyAnswers} />
-                  )}
+                  <AnswerSummarySection title="정책 매칭 정보" questions={policyQuestions} answers={policyAnswers} />
                 </div>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
-                  <button type="button" onClick={() => setStep(incheonReport ? "gas" : "policy")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
+                  <button type="button" onClick={() => setStep("policy")} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600">
                     이전
                   </button>
                   <button

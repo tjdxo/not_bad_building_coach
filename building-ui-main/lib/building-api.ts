@@ -11,6 +11,8 @@ export type ApiBuilding = {
   floors: number;
   elevator_count: number;
   display_address?: string | null;
+  sgg_cd_nm?: string | null;
+  bjd_cd_nm?: string | null;
   plat_plc?: string | null;
   bld_nm?: string | null;
   dong_nm?: string | null;
