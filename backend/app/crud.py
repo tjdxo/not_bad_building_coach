@@ -38,7 +38,7 @@ REGION_TABLES: Dict[Region, Dict[str, str]] = {
     "incheon": {
         "electric": "electric_energy_service_lite_incheon",
         "gas": "gas_energy_service_lite_incheon",
-        "peer": "peer_benchmark_results_incheon",
+        "peer": "peer_benchmark_results_incheon_with_monthly_absolute",
     },
 }
 

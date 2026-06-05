@@ -165,8 +165,9 @@ def _build_peer_metric(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
 
 
 def _build_peer_monthly_series(row: Dict[str, Any], prefix: str) -> List[Dict[str, Any]]:
+    months = _peer_months_from_row(row, prefix)
     monthly = []
-    for year, month in PEER_BENCHMARK_MONTHS:
+    for year, month in months:
         use_ym, label = _format_month_parts(year, month)
         monthly.append(
             {
@@ -176,6 +177,26 @@ def _build_peer_monthly_series(row: Dict[str, Any], prefix: str) -> List[Dict[st
             }
         )
     return monthly
+
+
+def _peer_months_from_row(row: Dict[str, Any], prefix: str) -> Tuple[Tuple[int, int], ...]:
+    marker = f"{prefix}_"
+    months = set()
+    for key in row.keys():
+        if not str(key).startswith(marker):
+            continue
+        suffix = str(key)[len(marker):]
+        parts = suffix.rsplit("_", 1)
+        if len(parts) != 2:
+            continue
+        year_raw, month_raw = parts
+        if not (year_raw.isdigit() and month_raw.isdigit()):
+            continue
+        year = int(year_raw)
+        month = int(month_raw)
+        if 1 <= month <= 12:
+            months.add((year, month))
+    return tuple(sorted(months)) or PEER_BENCHMARK_MONTHS
 
 
 def _relative_grade_from_percentile(percentile: Optional[float]) -> Optional[str]:

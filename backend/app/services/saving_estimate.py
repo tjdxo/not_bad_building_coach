@@ -95,12 +95,32 @@ def _sum_peer_monthly(row: Optional[Dict[str, Any]], prefix: str) -> Optional[fl
         return None
     total = 0.0
     has_value = False
-    for year, month in PEER_BENCHMARK_MONTHS:
+    for year, month in _peer_months_from_row(row, prefix):
         value = safe_float(row.get("{0}_{1}_{2:02d}".format(prefix, year, month)))
         if value is not None:
             total += value
             has_value = True
     return total if has_value else None
+
+
+def _peer_months_from_row(row: Dict[str, Any], prefix: str) -> Tuple[Tuple[int, int], ...]:
+    marker = f"{prefix}_"
+    months = set()
+    for key in row.keys():
+        if not str(key).startswith(marker):
+            continue
+        suffix = str(key)[len(marker):]
+        parts = suffix.rsplit("_", 1)
+        if len(parts) != 2:
+            continue
+        year_raw, month_raw = parts
+        if not (year_raw.isdigit() and month_raw.isdigit()):
+            continue
+        year = int(year_raw)
+        month = int(month_raw)
+        if 1 <= month <= 12:
+            months.add((year, month))
+    return tuple(sorted(months)) or PEER_BENCHMARK_MONTHS
 
 
 def _first_positive(row: Optional[Dict[str, Any]], keys: Tuple[str, ...]) -> Optional[float]:
