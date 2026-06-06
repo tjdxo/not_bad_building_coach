@@ -567,7 +567,24 @@ export default function SearchPage() {
                 <h3 className="text-lg font-black text-slate-950">검색 결과가 없습니다.</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   건물명·동명을 비우거나, 구와 동을 조금 넓히고 세부 주소를 짧게 줄여 다시 검색해 주세요.
+                  그래도 건물이 보이지 않는다면 직접 건물 정보를 입력해 임시 진단 요청 화면을 확인할 수 있습니다.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      region,
+                      address: query.trim(),
+                      district: district.trim(),
+                      dong: dong.trim(),
+                      building_keyword: buildingKeyword.trim(),
+                    });
+                    router.push(`/search/add-building?${params.toString()}`);
+                  }}
+                  className="mt-6 inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500"
+                >
+                  직접 건물 입력하기
+                </button>
               </div>
             )}
 
