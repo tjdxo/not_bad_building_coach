@@ -141,6 +141,10 @@ def measured_energy_summary(usage_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     period_start = format_date_value(usage_rows[0].get("use_ym")) if usage_rows else None
     period_end = format_date_value(usage_rows[-1].get("use_ym")) if usage_rows else None
+    availability = build_energy_availability(
+        [item["value"] for item in electricity_monthly],
+        [item["value"] for item in gas_monthly],
+    )
 
     return {
         "has_measured_data": bool(elec_has or gas_has),
@@ -152,7 +156,72 @@ def measured_energy_summary(usage_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "total_annual_source_value": round(elec_total + gas_total, 2) if (elec_has or gas_has) else None,
         "electricity_monthly": electricity_monthly,
         "gas_monthly": gas_monthly,
+        "energy_availability": availability,
         "gas_unit_note": "energy_usage.gas_qty 원본 단위 기준입니다.",
+    }
+
+
+def classify_energy_availability(values: List[Optional[float]], label: str) -> Dict[str, Any]:
+    total_months = len(values)
+    numeric_values = [value for value in values if value is not None]
+    positive_months = sum(1 for value in numeric_values if value and value > 0)
+    zero_months = sum(1 for value in numeric_values if value == 0)
+    measured_months = len(numeric_values)
+    missing_months = max(0, total_months - measured_months)
+    is_zero_confirmed = total_months >= 12 and measured_months >= 12 and zero_months >= 12
+    has_data = positive_months > 0 or is_zero_confirmed
+    compare_available = measured_months >= 9 and has_data
+    if compare_available:
+        status_label = "비교 가능"
+    elif 3 <= measured_months <= 8 and has_data:
+        status_label = "참고용"
+    else:
+        status_label = "데이터 부족"
+    return {
+        "has_data": has_data,
+        "compare_available": compare_available,
+        "measured_months": measured_months,
+        "missing_months": missing_months,
+        "zero_months": zero_months,
+        "is_missing": not has_data or measured_months <= 2,
+        "is_zero_confirmed": is_zero_confirmed,
+        "status_label": status_label,
+        "label": label,
+    }
+
+
+def build_energy_availability(
+    electricity_values: List[Optional[float]],
+    gas_values: List[Optional[float]],
+) -> Dict[str, Any]:
+    electricity = classify_energy_availability(electricity_values, "전기")
+    gas = classify_energy_availability(gas_values, "가스")
+    total_compare_available = electricity["compare_available"] and gas["compare_available"]
+    missing_labels = [
+        item["label"]
+        for item in (electricity, gas)
+        if item["is_missing"] or not item["compare_available"]
+    ]
+    limitation_message = None
+    if missing_labels:
+        limitation_message = "{0} 사용량 데이터가 부족하여 종합 등급과 원인 해석은 참고용으로만 봐야 합니다.".format(
+            ", ".join(missing_labels)
+        )
+    return {
+        "electricity": electricity,
+        "gas": gas,
+        "total": {
+            "has_data": total_compare_available,
+            "compare_available": total_compare_available,
+            "measured_months": min(electricity["measured_months"], gas["measured_months"]),
+            "missing_months": max(electricity["missing_months"], gas["missing_months"]),
+            "zero_months": 0,
+            "is_missing": not total_compare_available,
+            "is_zero_confirmed": False,
+            "status_label": "비교 가능" if total_compare_available else "산정 제한",
+        },
+        "has_partial_missing": electricity["is_missing"] != gas["is_missing"] or not total_compare_available,
+        "limitation_message": limitation_message,
     }
 
 
@@ -272,6 +341,7 @@ def build_ai_report_context(
         peer_row,
         energy_context.get("period_start"),
         energy_context.get("period_end"),
+        energy_availability=energy_context.get("energy_availability"),
     )
 
     context = {
@@ -298,6 +368,7 @@ def build_ai_report_context(
         "region_name": region_name,
         "report_audience": report_audience,
         "energy": energy_context,
+        "energy_availability": energy_context.get("energy_availability"),
         "peer_benchmark": build_peer_context(peer_row, region),
         "grades": build_grade_context(peer_row, region),
         "ai_estimate": ai_estimate,

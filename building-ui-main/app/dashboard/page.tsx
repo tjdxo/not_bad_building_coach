@@ -117,6 +117,7 @@ function buildChartData(report: ReportApiResponse, source: "electricity" | "gas"
 function buildActions(report: ReportApiResponse) {
   const electricityRatio = report.energy_summary.electricity_ratio;
   const gasRatio = report.energy_summary.gas_ratio;
+  const gasAvailable = report.energy_availability?.gas?.compare_available ?? true;
   const actions = [];
 
   actions.push({
@@ -142,6 +143,14 @@ function buildActions(report: ReportApiResponse) {
     desc: `${report.building.name}의 면적, 준공연도, 월별 사용량을 기준으로 에너지효율화 지원 사업 신청 가능성을 검토합니다.`,
     impact: "중간",
   });
+
+  if (!gasAvailable) {
+    actions[1] = {
+      title: "가스 사용량 데이터 확인",
+      desc: "가스 사용량 데이터가 충분하지 않아 난방 방식, 지역난방 여부, 온수 사용 방식을 먼저 확인해야 합니다.",
+      impact: "확인 필요",
+    };
+  }
 
   return actions;
 }
@@ -403,12 +412,16 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
 
   const totalSaving = estimate.total?.saving_krw ?? 0;
   const hasSaving = estimate.available && totalSaving > 0;
-  const electricitySaving = estimate.electricity?.saving_krw ?? 0;
-  const gasSaving = estimate.gas?.saving_krw ?? 0;
   const noSavingMessage = estimate.available
     ? "이미 유사군 상위 10% 기준 이내 수준입니다."
     : estimate.reason || "예상 절약액을 산정하기 위한 비교 데이터가 부족합니다.";
   const formatEnergySavingValue = (value: number) => (value > 0 ? formatApproxKrw(value) : "상위권 기준 이하");
+  const formatEnergySavingItem = (item?: SavingEstimateEnergy | null) => {
+    if (item?.benchmark_type === "excluded_missing_data") {
+      return "데이터 부족";
+    }
+    return formatEnergySavingValue(item?.saving_krw ?? 0);
+  };
 
   return (
     <section className="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 shadow-sm">
@@ -436,7 +449,7 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
         <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-black text-slate-950">전기</div>
-            <div className="text-lg font-black text-slate-950">{formatEnergySavingValue(electricitySaving)}</div>
+            <div className="text-lg font-black text-slate-950">{formatEnergySavingItem(estimate.electricity)}</div>
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             절감 가능량 {formatSavingUsage(estimate.electricity)} · 단가{" "}
@@ -446,7 +459,7 @@ function SavingEstimateCard({ estimate }: { estimate?: SavingEstimate | null }) 
         <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-100">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-black text-slate-950">가스</div>
-            <div className="text-lg font-black text-slate-950">{formatEnergySavingValue(gasSaving)}</div>
+            <div className="text-lg font-black text-slate-950">{formatEnergySavingItem(estimate.gas)}</div>
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             절감 가능량 {formatSavingUsage(estimate.gas)} · 단가{" "}

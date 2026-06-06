@@ -91,13 +91,32 @@ class AnalysisResult(BaseModel):
 class MonthlyEnergyPoint(BaseModel):
     year: int
     month: int
-    target_electricity_kwh: float
-    target_gas_m3: float
-    peer_avg_electricity_kwh: float
-    peer_avg_gas_m3: float
+    target_electricity_kwh: Optional[float] = None
+    target_gas_m3: Optional[float] = None
+    peer_avg_electricity_kwh: Optional[float] = None
+    peer_avg_gas_m3: Optional[float] = None
     use_ym: Optional[str] = None
     label: Optional[str] = None
     is_estimated: Optional[bool] = None
+
+
+class EnergyAvailabilityItem(BaseModel):
+    has_data: bool
+    compare_available: bool
+    measured_months: int
+    missing_months: int
+    zero_months: int
+    is_missing: bool
+    is_zero_confirmed: bool
+    status_label: str
+
+
+class EnergyAvailability(BaseModel):
+    electricity: EnergyAvailabilityItem
+    gas: EnergyAvailabilityItem
+    total: EnergyAvailabilityItem
+    has_partial_missing: bool
+    limitation_message: Optional[str] = None
 
 
 class EnergyUsageMonthlyPoint(BaseModel):
@@ -178,6 +197,7 @@ class ReportResponse(BaseModel):
     report_text: str
     raw_analysis_json: Dict[str, Any]
     energy: Optional[ReportEnergyInfo] = None
+    energy_availability: Optional[EnergyAvailability] = None
     peer_benchmark: Optional[Dict[str, Any]] = None
     ai_diagnosis: Optional[AiDiagnosis] = None
     saving_estimate: Optional[Dict[str, Any]] = None

@@ -53,10 +53,10 @@ export type SearchRegion = "seoul" | "incheon";
 export type MonthlyEnergyPoint = {
   year: number;
   month: number;
-  target_electricity_kwh: number;
-  target_gas_m3: number;
-  peer_avg_electricity_kwh: number;
-  peer_avg_gas_m3: number;
+  target_electricity_kwh: number | null;
+  target_gas_m3: number | null;
+  peer_avg_electricity_kwh: number | null;
+  peer_avg_gas_m3: number | null;
   use_ym?: string | null;
   label?: string | null;
   is_estimated?: boolean | null;
@@ -67,6 +67,25 @@ export type EnergyUsageMonthlyPoint = {
   label: string;
   value: number | null;
   is_estimated: boolean;
+};
+
+export type EnergyAvailabilityItem = {
+  has_data: boolean;
+  compare_available: boolean;
+  measured_months: number;
+  missing_months: number;
+  zero_months: number;
+  is_missing: boolean;
+  is_zero_confirmed: boolean;
+  status_label: string;
+};
+
+export type EnergyAvailability = {
+  electricity: EnergyAvailabilityItem;
+  gas: EnergyAvailabilityItem;
+  total: EnergyAvailabilityItem;
+  has_partial_missing: boolean;
+  limitation_message?: string | null;
 };
 
 export type PeerMetric = {
@@ -190,6 +209,7 @@ export type SavingEstimateEnergy = {
   target_annual_usage?: number | null;
   saving_usage?: number | null;
   saving_krw?: number | null;
+  reason?: string | null;
 };
 
 export type SavingEstimate = {
@@ -223,6 +243,7 @@ export type ReportApiResponse = {
     label?: string | null;
   } | null;
   energy?: ReportEnergyInfo | null;
+  energy_availability?: EnergyAvailability | null;
   peer_benchmark?: PeerBenchmark | null;
   energy_summary: {
     target_avg_electricity_kwh: number;
@@ -845,10 +866,6 @@ function parseEnergyUsageMonth(point: EnergyUsageMonthlyPoint) {
   return { year: 0, month: 0 };
 }
 
-function numericEnergyValue(value: number | null | undefined) {
-  return value ?? 0;
-}
-
 export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[] {
   const electricityMonthly = report.energy?.electricity_monthly ?? [];
   const gasMonthly = report.energy?.gas_monthly ?? [];
@@ -868,10 +885,10 @@ export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[
       const peerElectricityItem = peerElectricityByMonth.get(baseItem.use_ym);
       const peerGasItem = peerGasByMonth.get(baseItem.use_ym);
       const { year, month } = parseEnergyUsageMonth(baseItem);
-      const electricityValue = numericEnergyValue(electricityItem?.value);
-      const gasValue = numericEnergyValue(gasItem?.value);
-      const peerElectricityValue = numericEnergyValue(peerElectricityItem?.value);
-      const peerGasValue = numericEnergyValue(peerGasItem?.value);
+      const electricityValue = electricityItem?.value ?? null;
+      const gasValue = gasItem?.value ?? null;
+      const peerElectricityValue = peerElectricityItem?.value ?? null;
+      const peerGasValue = peerGasItem?.value ?? null;
 
       return {
         year,
@@ -881,8 +898,8 @@ export function getMonthlyEnergy(report: ReportApiResponse): MonthlyEnergyPoint[
         is_estimated: electricityItem?.is_estimated ?? false,
         target_electricity_kwh: electricityValue,
         target_gas_m3: gasValue,
-        peer_avg_electricity_kwh: peerElectricityItem ? peerElectricityValue : 0,
-        peer_avg_gas_m3: peerGasItem ? peerGasValue : 0,
+        peer_avg_electricity_kwh: peerElectricityItem ? peerElectricityValue : null,
+        peer_avg_gas_m3: peerGasItem ? peerGasValue : null,
       };
     });
   }

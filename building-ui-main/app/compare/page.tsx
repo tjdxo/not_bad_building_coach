@@ -14,11 +14,17 @@ import {
 } from "@/lib/building-api";
 import { AiReportPanel } from "../dashboard/ai-report-panel";
 
-function safePerArea(value: number, area: number) {
-  return area > 0 ? value / area : 0;
+function safePerArea(value: number | null | undefined, area: number) {
+  return value !== null && value !== undefined && area > 0 ? value / area : null;
 }
 
-function energyStatus(target: number, peer: number) {
+function energyStatus(target: number | null | undefined, peer: number | null | undefined, available = true) {
+  if (!available) {
+    return "확인 필요";
+  }
+  if (target === null || target === undefined || peer === null || peer === undefined) {
+    return "데이터 부족";
+  }
   if (!Number.isFinite(target) || !Number.isFinite(peer) || peer <= 0) {
     return "산정 불가";
   }
@@ -49,6 +55,18 @@ function statusClass(status: string) {
   };
 
   return classes[status] || "bg-slate-100 text-slate-500";
+}
+
+function maxPresent(values: Array<number | null | undefined>) {
+  const present = values.filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
+  return present.length ? Math.max(...present) : null;
+}
+
+function formatMetricValue(value: number | null | undefined, maximumFractionDigits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "데이터 없음";
+  }
+  return formatNumber(value, maximumFractionDigits);
 }
 
 function clampedPeerRankLabel(peerCount?: number | null, rank?: number | null, fallbackLabel?: string | null) {
@@ -83,16 +101,14 @@ function peerSummaryTitle(label: string) {
 
 function buildComparisonMetrics(report: ReportApiResponse) {
   const monthlyEnergy = getMonthlyEnergy(report);
-  const peakElectricity = Math.max(
-    0,
-    ...monthlyEnergy.map((item) => item.target_electricity_kwh),
-  );
-  const peerPeakElectricity = Math.max(
-    0,
-    ...monthlyEnergy.map((item) => item.peer_avg_electricity_kwh),
-  );
-  const peakGas = Math.max(0, ...monthlyEnergy.map((item) => item.target_gas_m3));
-  const peerPeakGas = Math.max(0, ...monthlyEnergy.map((item) => item.peer_avg_gas_m3));
+  const availability = report.energy_availability;
+  const electricityAvailable = availability?.electricity?.compare_available ?? true;
+  const gasAvailable = availability?.gas?.compare_available ?? true;
+  const totalAvailable = availability?.total?.compare_available ?? true;
+  const peakElectricity = maxPresent(monthlyEnergy.map((item) => item.target_electricity_kwh));
+  const peerPeakElectricity = maxPresent(monthlyEnergy.map((item) => item.peer_avg_electricity_kwh));
+  const peakGas = maxPresent(monthlyEnergy.map((item) => item.target_gas_m3));
+  const peerPeakGas = maxPresent(monthlyEnergy.map((item) => item.peer_avg_gas_m3));
   const electricityPerArea =
     report.peer_benchmark?.electricity?.target_per_area ??
     safePerArea(report.energy_summary.target_avg_electricity_kwh, report.building.gross_floor_area);
@@ -114,33 +130,34 @@ function buildComparisonMetrics(report: ReportApiResponse) {
       unit: "kWh",
       target: report.energy_summary.target_avg_electricity_kwh,
       peer: report.energy_summary.peer_avg_electricity_kwh,
-      status: energyStatus(report.energy_summary.target_avg_electricity_kwh, report.energy_summary.peer_avg_electricity_kwh),
+      status: energyStatus(report.energy_summary.target_avg_electricity_kwh, report.energy_summary.peer_avg_electricity_kwh, electricityAvailable),
     },
     {
       label: "월 평균 가스 사용량",
       unit: "kWh",
-      target: report.energy_summary.target_avg_gas_m3,
+      target: gasAvailable ? report.energy_summary.target_avg_gas_m3 : null,
       peer: report.energy_summary.peer_avg_gas_m3,
-      status: energyStatus(report.energy_summary.target_avg_gas_m3, report.energy_summary.peer_avg_gas_m3),
+      status: energyStatus(gasAvailable ? report.energy_summary.target_avg_gas_m3 : null, report.energy_summary.peer_avg_gas_m3, gasAvailable),
     },
     {
       label: "단위 면적당 전력 소비",
       unit: "kWh/㎡",
       target: electricityPerArea,
       peer: peerElectricityPerArea,
-      status: energyStatus(electricityPerArea, peerElectricityPerArea),
+      status: energyStatus(electricityPerArea, peerElectricityPerArea, electricityAvailable),
     },
     {
       label: "단위 면적당 가스 소비",
       unit: "kWh/㎡",
-      target: gasPerArea,
+      target: gasAvailable ? gasPerArea : null,
       peer: peerGasPerArea,
-      status: energyStatus(gasPerArea, peerGasPerArea),
+      status: energyStatus(gasAvailable ? gasPerArea : null, peerGasPerArea, gasAvailable),
     },
     ...(totalPerArea !== null &&
     totalPerArea !== undefined &&
     peerTotalPerArea !== null &&
-    peerTotalPerArea !== undefined
+    peerTotalPerArea !== undefined &&
+    totalAvailable
       ? [
           {
             label: "총 에너지 원단위",
@@ -156,21 +173,21 @@ function buildComparisonMetrics(report: ReportApiResponse) {
       unit: "kWh",
       target: peakElectricity,
       peer: peerPeakElectricity,
-      status: energyStatus(peakElectricity, peerPeakElectricity),
+      status: energyStatus(peakElectricity, peerPeakElectricity, electricityAvailable),
     },
     {
       label: "월 최대 가스 사용량",
       unit: "kWh",
-      target: peakGas,
+      target: gasAvailable ? peakGas : null,
       peer: peerPeakGas,
-      status: energyStatus(peakGas, peerPeakGas),
+      status: energyStatus(gasAvailable ? peakGas : null, peerPeakGas, gasAvailable),
     },
     {
       label: "에너지 낭비 지수",
       unit: "점",
       target: report.analysis.energy_waste_index,
       peer: 100,
-      status: energyStatus(report.analysis.energy_waste_index, 100),
+      status: totalAvailable ? energyStatus(report.analysis.energy_waste_index, 100) : "참고용",
     },
   ];
 }
@@ -328,10 +345,10 @@ export default async function ComparePage({
                     <div className="mt-1 text-[11px] font-bold text-slate-400 sm:text-xs">{metric.unit}</div>
                   </div>
                   <div className="whitespace-nowrap text-center text-base font-black text-slate-950 sm:text-xl">
-                    {formatNumber(metric.target, 2)}
+                    {formatMetricValue(metric.target, 2)}
                   </div>
                   <div className="whitespace-nowrap text-center text-base font-black text-slate-400 sm:text-xl">
-                    {formatNumber(metric.peer, 2)}
+                    {formatMetricValue(metric.peer, 2)}
                   </div>
                   <div className="flex justify-center text-center">
                     <span

@@ -193,12 +193,34 @@ def _build_energy_saving_item(
     }
 
 
+def _unavailable_energy_saving_item(unit: str, reason: str) -> Dict[str, Any]:
+    return {
+        "available": False,
+        "unit": unit,
+        "benchmark_type": "excluded_missing_data",
+        "my_annual_usage": None,
+        "peer_mean_annual_usage": None,
+        "peer_best_annual_usage": None,
+        "target_annual_usage": None,
+        "saving_usage": None,
+        "saving_krw": 0,
+        "reason": reason,
+    }
+
+
+def _source_compare_available(energy_availability: Optional[Dict[str, Any]], source: str) -> bool:
+    if not energy_availability:
+        return True
+    return bool((energy_availability.get(source) or {}).get("compare_available"))
+
+
 def build_saving_estimate(
     db: Optional[Session],
     usage_rows: List[Dict[str, Any]],
     peer_row: Optional[Dict[str, Any]],
     period_start: Optional[str],
     period_end: Optional[str],
+    energy_availability: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     electricity_unit_price = get_electricity_unit_price()
     gas_unit_price = get_gas_unit_price()
@@ -217,8 +239,10 @@ def build_saving_estimate(
             },
         }
 
-    my_elec = _sum_usage(usage_rows, "elec_qty")
-    my_gas = _sum_usage(usage_rows, "gas_qty")
+    electricity_available = _source_compare_available(energy_availability, "electricity")
+    gas_available = _source_compare_available(energy_availability, "gas")
+    my_elec = _sum_usage(usage_rows, "elec_qty") if electricity_available else None
+    my_gas = _sum_usage(usage_rows, "gas_qty") if gas_available else None
     peer_mean_elec = _sum_peer_monthly(peer_row, "peer_elec_mean")
     peer_mean_gas = _sum_peer_monthly(peer_row, "peer_gas_mean")
 
@@ -239,23 +263,31 @@ def build_saving_estimate(
         peer_best_elec = safe_float(best_usage.get("elec_qty"))
         peer_best_gas = safe_float(best_usage.get("gas_qty"))
 
-    electricity = _build_energy_saving_item(
-        "kWh",
-        my_elec,
-        peer_mean_elec,
-        peer_best_elec,
-        exact_elec_target,
-        electricity_unit_price,
-        estimate_electricity_cost_krw,
+    electricity = (
+        _build_energy_saving_item(
+            "kWh",
+            my_elec,
+            peer_mean_elec,
+            peer_best_elec,
+            exact_elec_target,
+            electricity_unit_price,
+            estimate_electricity_cost_krw,
+        )
+        if electricity_available
+        else _unavailable_energy_saving_item("kWh", "전기 사용량 데이터가 부족하여 전기 절감액 산정에서 제외했습니다.")
     )
-    gas = _build_energy_saving_item(
-        "kWh",
-        my_gas,
-        peer_mean_gas,
-        peer_best_gas,
-        exact_gas_target,
-        gas_unit_price,
-        estimate_gas_cost_krw,
+    gas = (
+        _build_energy_saving_item(
+            "kWh",
+            my_gas,
+            peer_mean_gas,
+            peer_best_gas,
+            exact_gas_target,
+            gas_unit_price,
+            estimate_gas_cost_krw,
+        )
+        if gas_available
+        else _unavailable_energy_saving_item("kWh", "가스 사용량 데이터가 부족하여 가스 절감액 산정에서 제외했습니다.")
     )
 
     benchmark_types = [item["benchmark_type"] for item in (electricity, gas) if item.get("available")]
@@ -273,6 +305,9 @@ def build_saving_estimate(
     reason = None
     if not available:
         reason = "유사군 평균 또는 우수건물 사용량이 부족해 예상 절약액을 산정할 수 없습니다."
+
+    if available and energy_availability and energy_availability.get("has_partial_missing"):
+        reason = "일부 에너지원 데이터가 부족하여 확인 가능한 에너지원 기준으로만 예상 절감액을 산정했습니다."
 
     return {
         "available": bool(available),

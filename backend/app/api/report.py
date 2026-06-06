@@ -350,6 +350,178 @@ def _monthly_values_by_use_ym(series: List[Dict[str, Any]]) -> Dict[str, Optiona
     return {item["use_ym"]: item.get("value") for item in series}
 
 
+def _classify_energy_availability(values: List[Optional[float]], label: str) -> Dict[str, Any]:
+    total_months = len(values)
+    numeric_values = [value for value in values if value is not None]
+    positive_months = sum(1 for value in numeric_values if value and value > 0)
+    zero_months = sum(1 for value in numeric_values if value == 0)
+    measured_months = len(numeric_values)
+    missing_months = max(0, total_months - measured_months)
+    is_zero_confirmed = total_months >= 12 and measured_months >= 12 and zero_months >= 12
+    has_data = positive_months > 0 or is_zero_confirmed
+    compare_available = measured_months >= 9 and has_data
+
+    if compare_available:
+        status_label = "비교 가능"
+    elif 3 <= measured_months <= 8 and has_data:
+        status_label = "참고용"
+    else:
+        status_label = "데이터 부족"
+
+    return {
+        "has_data": has_data,
+        "compare_available": compare_available,
+        "measured_months": measured_months,
+        "missing_months": missing_months,
+        "zero_months": zero_months,
+        "is_missing": not has_data or measured_months <= 2,
+        "is_zero_confirmed": is_zero_confirmed,
+        "status_label": status_label,
+        "label": label,
+    }
+
+
+def _build_energy_availability(
+    electricity_values: List[Optional[float]],
+    gas_values: List[Optional[float]],
+) -> Dict[str, Any]:
+    electricity = _classify_energy_availability(electricity_values, "전기")
+    gas = _classify_energy_availability(gas_values, "가스")
+    total_compare_available = electricity["compare_available"] and gas["compare_available"]
+    has_partial_missing = electricity["is_missing"] != gas["is_missing"] or not total_compare_available
+    total_status = "비교 가능" if total_compare_available else "산정 제한"
+    missing_labels = [
+        item["label"]
+        for item in (electricity, gas)
+        if item["is_missing"] or not item["compare_available"]
+    ]
+    limitation_message = None
+    if missing_labels:
+        limitation_message = "{0} 사용량 데이터가 부족하여 종합 에너지 원단위와 등급은 참고용으로만 해석해야 합니다.".format(
+            ", ".join(missing_labels)
+        )
+
+    return {
+        "electricity": electricity,
+        "gas": gas,
+        "total": {
+            "has_data": total_compare_available,
+            "compare_available": total_compare_available,
+            "measured_months": min(electricity["measured_months"], gas["measured_months"]),
+            "missing_months": max(electricity["missing_months"], gas["missing_months"]),
+            "zero_months": 0,
+            "is_missing": not total_compare_available,
+            "is_zero_confirmed": False,
+            "status_label": total_status,
+        },
+        "has_partial_missing": has_partial_missing,
+        "limitation_message": limitation_message,
+    }
+
+
+def _availability_ratio(
+    peer_benchmark: Dict[str, Any],
+    metric_key: str,
+    target_average: float,
+    peer_average: float,
+    availability: Dict[str, Any],
+) -> float:
+    if not availability.get(metric_key, {}).get("compare_available"):
+        return 1
+    prefix = "electricity" if metric_key == "electricity" else metric_key
+    return _ratio_from_pct(
+        peer_benchmark.get(prefix, {}).get("vs_peer_pct") if peer_benchmark.get("has_data") else None,
+        target_average,
+        peer_average,
+    )
+
+
+def _limited_grade_from_available_source(
+    peer_benchmark: Dict[str, Any],
+    availability: Dict[str, Any],
+) -> Optional[str]:
+    source_key = None
+    if availability["electricity"]["compare_available"] and not availability["gas"]["compare_available"]:
+        source_key = "electricity"
+    elif availability["gas"]["compare_available"] and not availability["electricity"]["compare_available"]:
+        source_key = "gas"
+    if not source_key:
+        return None
+
+    metric = peer_benchmark.get(source_key) or {}
+    vs_peer_pct = _coerce_float_or_none(metric.get("vs_peer_pct"))
+    percentile = _coerce_float_or_none(metric.get("percentile"))
+    if vs_peer_pct is not None:
+        if vs_peer_pct > 10:
+            return "D"
+        if vs_peer_pct >= -10:
+            return "C"
+        return "B"
+    if percentile is not None:
+        if percentile >= 60:
+            return "D"
+        if percentile >= 40:
+            return "C"
+        return "B"
+    return "C"
+
+
+def _apply_availability_to_peer_benchmark(
+    peer_benchmark: Dict[str, Any],
+    availability: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not peer_benchmark.get("has_data"):
+        return peer_benchmark
+
+    for key, label in (("electricity", "전기"), ("gas", "가스")):
+        if availability[key]["compare_available"]:
+            continue
+        metric = peer_benchmark.get(key) or {}
+        metric.update(
+            {
+                "target_per_area": None,
+                "vs_peer_pct": None,
+                "vs_peer_median_pct": None,
+                "status_label": "데이터 부족",
+                "availability_status": availability[key]["status_label"],
+                "missing_message": "{0} 사용량 데이터가 부족하여 유사군 비교에서 제외했습니다.".format(label),
+            }
+        )
+        peer_benchmark[key] = metric
+
+    if not availability["total"]["compare_available"]:
+        limited_grade = _limited_grade_from_available_source(peer_benchmark, availability)
+        total_metric = peer_benchmark.get("total") or {}
+        total_metric.update(
+            {
+                "target_per_area": None,
+                "vs_peer_pct": None,
+                "vs_peer_median_pct": None,
+                "status_label": "산정 제한",
+                "availability_status": "산정 제한",
+            }
+        )
+        peer_benchmark["total"] = total_metric
+        peer_benchmark["peer_overuse_type"] = _safe_string(peer_benchmark.get("peer_overuse_type")) or "일부 에너지원 데이터 부족"
+        peer_benchmark["reliability_label"] = "참고용"
+        peer_benchmark["reliability_reason"] = availability.get("limitation_message")
+        peer_benchmark["data_completeness_warning"] = availability.get("limitation_message")
+        peer_benchmark["absolute_grade"] = {
+            **(peer_benchmark.get("absolute_grade") or {}),
+            "grade": limited_grade,
+            "status": "limited_energy_data",
+            "basis_label": "일부 에너지원 기준 참고등급",
+            "description": availability.get("limitation_message"),
+        }
+        peer_benchmark["relative_grade"] = {
+            **(peer_benchmark.get("relative_grade") or {}),
+            "grade": limited_grade,
+            "source": "available_energy_limited",
+            "basis_label": "일부 에너지원 기준 참고등급",
+        }
+    return peer_benchmark
+
+
 def _ratio_from_pct(vs_peer_pct: Optional[float], target_average: float, peer_average: float) -> float:
     if vs_peer_pct is not None:
         return round(1 + (vs_peer_pct / 100), 4)
@@ -792,10 +964,10 @@ def build_energy_usage_report(
                 use_ym=use_ym,
                 label=label,
                 is_estimated=is_estimated,
-                target_electricity_kwh=electricity_value if electricity_value is not None else 0,
-                target_gas_m3=gas_value if gas_value is not None else 0,
-                peer_avg_electricity_kwh=peer_electricity_value if peer_electricity_value is not None else 0,
-                peer_avg_gas_m3=peer_gas_value if peer_gas_value is not None else 0,
+                target_electricity_kwh=electricity_value,
+                target_gas_m3=gas_value,
+                peer_avg_electricity_kwh=peer_electricity_value,
+                peer_avg_gas_m3=peer_gas_value,
             )
         )
         electricity_monthly.append(
@@ -815,34 +987,51 @@ def build_energy_usage_report(
             )
         )
 
-    avg_electricity = _average_present(electricity_values)
-    avg_gas = _average_present(gas_values)
+    energy_availability = _build_energy_availability(electricity_values, gas_values)
+    peer_benchmark = _apply_availability_to_peer_benchmark(peer_benchmark, energy_availability)
+    avg_electricity = _average_present(electricity_values) if energy_availability["electricity"]["has_data"] else 0
+    avg_gas = _average_present(gas_values) if energy_availability["gas"]["has_data"] else 0
     peer_electricity_values = list(peer_electricity_by_month.values())
     peer_gas_values = list(peer_gas_by_month.values())
     peer_avg_electricity = _average_present(peer_electricity_values)
     peer_avg_gas = _average_present(peer_gas_values)
-    if peer_avg_electricity == 0:
+    if peer_avg_electricity == 0 and energy_availability["electricity"]["compare_available"]:
         peer_avg_electricity = avg_electricity
-    if peer_avg_gas == 0:
+    if peer_avg_gas == 0 and energy_availability["gas"]["compare_available"]:
         peer_avg_gas = avg_gas
-    electricity_ratio = _ratio_from_pct(
-        peer_benchmark.get("electricity", {}).get("vs_peer_pct") if peer_benchmark.get("has_data") else None,
+    electricity_ratio = _availability_ratio(
+        peer_benchmark,
+        "electricity",
         avg_electricity,
         peer_avg_electricity,
+        energy_availability,
     )
-    gas_ratio = _ratio_from_pct(
-        peer_benchmark.get("gas", {}).get("vs_peer_pct") if peer_benchmark.get("has_data") else None,
+    gas_ratio = _availability_ratio(
+        peer_benchmark,
+        "gas",
         avg_gas,
         peer_avg_gas,
+        energy_availability,
     )
     absolute_grade = peer_benchmark.get("absolute_grade", {}) if peer_benchmark.get("has_data") else {}
     relative_grade = peer_benchmark.get("relative_grade", {}) if peer_benchmark.get("has_data") else {}
     analysis_grade = absolute_grade.get("grade") or relative_grade.get("grade") or "사용량 확인"
+    if not energy_availability["total"]["compare_available"]:
+        analysis_grade = "산정 제한"
     energy_waste_index = _energy_waste_index_from_ratios(electricity_ratio, gas_ratio)
     interpretation = _peer_interpretation(peer_benchmark, electricity_ratio, gas_ratio)
+    if energy_availability.get("limitation_message"):
+        interpretation = "{0} {1}".format(interpretation, energy_availability["limitation_message"])
     period_start = electricity_monthly[0].use_ym if electricity_monthly else None
     period_end = electricity_monthly[-1].use_ym if electricity_monthly else None
-    saving_estimate = build_saving_estimate(db, ordered_usage_rows, peer_benchmark_row, period_start, period_end)
+    saving_estimate = build_saving_estimate(
+        db,
+        ordered_usage_rows,
+        peer_benchmark_row,
+        period_start,
+        period_end,
+        energy_availability=energy_availability,
+    )
     raw_analysis_json = {
         "building": building,
         "region": region,
@@ -853,6 +1042,7 @@ def build_energy_usage_report(
         "peer_benchmark": peer_benchmark,
         "ai_diagnosis": ai_diagnosis,
         "saving_estimate": saving_estimate,
+        "energy_availability": energy_availability,
     }
     measured_ai_diagnosis = ai_diagnosis.copy()
     if measured_ai_diagnosis.get("has_data"):
@@ -890,6 +1080,7 @@ def build_energy_usage_report(
             region,
         ),
         raw_analysis_json=raw_analysis_json,
+        energy_availability=energy_availability,
         energy={
             "source": "db",
             "has_data": True,
