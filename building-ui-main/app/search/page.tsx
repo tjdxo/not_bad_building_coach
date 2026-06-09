@@ -141,8 +141,8 @@ export default function SearchPage() {
   const canSearch = Boolean(region || district || dong || query.trim() || buildingKeyword.trim());
   const searchControlsDisabled = loading;
   const queryPlaceholder = region === "incheon"
-    ? "예: 봉재산로 10, 부평동 10-394"
-    : "예: 성내천로, 거여동 362, 33다길 2";
+    ? "예: 768-59, 경인로834번길 15"
+    : "예: 34-5, 중계로8길 20";
 
   const resetSearchPage = () => {
     setPage(1);
@@ -436,7 +436,7 @@ export default function SearchPage() {
                     resetSearchPage();
                   }}
                   disabled={searchControlsDisabled}
-                  placeholder="예: 101동, 141동, 경비실20, 상가동"
+                  placeholder="예: 101동, 141동, 경비실"
                   className="mt-2 h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 <p className="mt-2 min-h-5 text-xs font-bold text-slate-400" />
