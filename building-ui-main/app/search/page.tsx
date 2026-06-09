@@ -325,7 +325,7 @@ export default function SearchPage() {
 
   return (
     <main className={`min-h-screen bg-slate-50 py-12 ${selectedBuilding ? "pb-32 lg:pb-12" : ""}`}>
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-7xl px-6">
         <div className="mb-8">
           <p className="text-sm font-black tracking-[0.25em] text-emerald-600">주소 검색</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">내 건물 주소 찾기</h1>
@@ -337,7 +337,7 @@ export default function SearchPage() {
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[0.75fr_1fr_1fr_1.35fr_1.35fr_auto] xl:items-end">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1.15fr_1.25fr_1.35fr_1.35fr_auto] xl:items-end">
               <div className="flex min-h-[112px] flex-col">
                 <label htmlFor="region" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">시도</label>
                 <select
