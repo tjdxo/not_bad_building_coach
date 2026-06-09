@@ -7,7 +7,7 @@ import { useState } from "react";
 const valuePoints = [
   {
     title: "주소 검색",
-    desc: "서울시 건물 주소와 건물명을 기준으로 진단 가능한 건물을 찾고, 필요한 경우 동일 주소 내 후보 중 정확한 건물을 선택합니다.",
+    desc: "서울특별시·인천광역시 건물 주소와 건물명을 기준으로 진단 가능한 건물을 찾고, 필요한 경우 동일 주소 내 후보 중 정확한 건물을 선택합니다.",
   },
   {
     title: "진단 대시보드 확인",
@@ -75,7 +75,7 @@ export default function Home() {
                       복잡한 회원가입 없이, 주소 검색만으로 건물 에너지 진단을 바로 시작해 보세요.
                     </h2>
                     <p className="break-keep text-xs leading-5 text-slate-600 sm:whitespace-nowrap sm:text-sm sm:leading-6">
-                      현재까지 서울시 약 60만 개의 건물이 진단 대상에 포함되었습니다.
+                      서울특별시·인천광역시 약 80만 개 건물이 진단 대상에 포함되었습니다.
                     </p>
                     <Link
                       href="/search"
