@@ -141,7 +141,7 @@ export default function SearchPage() {
   const canSearch = Boolean(region || district || dong || query.trim() || buildingKeyword.trim());
   const searchControlsDisabled = loading;
   const queryPlaceholder = region === "incheon"
-    ? "예: 768-59, 경인로834번길 15"
+    ? "예: 768-59, 경인로834번길"
     : "예: 34-5, 중계로8길 20";
 
   const resetSearchPage = () => {
