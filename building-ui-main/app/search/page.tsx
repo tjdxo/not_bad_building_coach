@@ -367,7 +367,7 @@ export default function SearchPage() {
                   value={district}
                   onChange={(event) => setDistrict(event.target.value)}
                   disabled={searchControlsDisabled}
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-8 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="">전체 구</option>
                   {districtOptions.map((item) => (
@@ -392,7 +392,7 @@ export default function SearchPage() {
                     resetSearchPage();
                   }}
                   disabled={!district || searchControlsDisabled}
-                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-8 text-sm font-bold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="">{district ? "전체 동" : "구를 먼저 선택하세요"}</option>
                   {dongs.map((item) => (
